@@ -1,22 +1,30 @@
 from decimal import Decimal
 from django.utils import timezone
 from django.db import transaction
+from django.core.files.base import ContentFile
 from apps.notificaciones.services import NotificacionService
 from .models import Pago, Factura
+from .pdf_factura import generar_factura_pdf_buffer
 
 
 class PagoService:
     """Servicio para gestión de pagos y facturación"""
 
     @staticmethod
-    def verificar_pago(pago: Pago, verificado_por) -> Pago:
+    def verificar_pago(pago: Pago, verificado_por, referencia_banco: str | None = None) -> Pago:
         """
-        Verifica un pago pendiente y confirma la reserva (Fase 4 del flujo)
+        Verifica un pago pendiente y confirma la reserva (Fase 4 del flujo).
+        referencia_banco: referencia opcional que registra el operador al verificar.
         """
         with transaction.atomic():
+            ref = (referencia_banco or '').strip()
+            update_fields = ['estado', 'fecha_pago']
             pago.estado = 'completado'
             pago.fecha_pago = timezone.now()
-            pago.save(update_fields=['estado', 'fecha_pago'])
+            if ref:
+                pago.referencia_transaccion = ref[:100]
+                update_fields.append('referencia_transaccion')
+            pago.save(update_fields=update_fields)
 
             reserva = pago.reserva
 
@@ -30,7 +38,9 @@ class PagoService:
                 factura = PagoService.generar_factura(pago)
 
                 # Notificar al cliente
-                NotificacionService.notificar_reserva_confirmada(reserva.cliente, reserva)
+                NotificacionService.notificar_reserva_confirmada(
+                    reserva.cliente, reserva, factura=factura
+                )
 
                 return pago
 
@@ -38,6 +48,9 @@ class PagoService:
             elif pago.tipo_pago == 'saldo':
                 # Generar factura del saldo
                 factura = PagoService.generar_factura(pago)
+                NotificacionService.notificar_pago_saldo_registrado(
+                    reserva.cliente, reserva, factura
+                )
 
                 return pago
 
@@ -80,9 +93,12 @@ class PagoService:
             razon_social=pago.reserva.cliente.nombre_empresa or pago.reserva.cliente.usuario.nombre_completo
         )
 
-        # TODO: Generar PDF de factura (usando ReportLab o similar)
-        # factura.pdf = generar_pdf_factura(factura)
-        # factura.save()
+        buf = generar_factura_pdf_buffer(factura)
+        factura.pdf.save(
+            f'{factura.numero_factura}.pdf',
+            ContentFile(buf.read()),
+            save=True,
+        )
 
         return factura
 

@@ -11,6 +11,25 @@ from apps.notificaciones.services import NotificacionService
 from .models import Cotizacion, CotizacionServicioAdicional
 
 
+def _monto_embalaje_opcional(cotizacion: Cotizacion) -> Decimal:
+    """Recargo por embalaje si el cliente lo marcó: usa servicio catálogo o fallback Bs/objeto."""
+    if not cotizacion.solicita_embalaje:
+        return Decimal('0')
+    n = max(1, int(cotizacion.cantidad_objetos or 0))
+    try:
+        sa = (
+            ServicioAdicional.objects.filter(es_activo=True, es_por_objeto=True)
+            .filter(nombre__icontains='embalaje')
+            .order_by('id')
+            .first()
+        )
+        if sa:
+            return Decimal(str(sa.precio)) * n
+    except Exception:
+        pass
+    return Decimal('50') * n
+
+
 def calcular_precio_cotizacion(cotizacion: Cotizacion, usar_ia: bool = True) -> dict:
     """
     Calcula precio_base según tarifa zona_origen->zona_destino y factor del tipo de servicio.
@@ -37,9 +56,12 @@ def calcular_precio_cotizacion(cotizacion: Cotizacion, usar_ia: bool = True) -> 
     for csa in cotizacion.servicios_adicionales_vinculados.all():
         servicios_extra += csa.precio_total
 
+    recargo_embalaje = _monto_embalaje_opcional(cotizacion)
+    servicios_extra_total = servicios_extra + recargo_embalaje
+
     cotizacion.precio_base = precio_base
-    cotizacion.precio_servicios_extra = servicios_extra
-    cotizacion.precio_total_calculado = precio_base + servicios_extra
+    cotizacion.precio_servicios_extra = servicios_extra_total
+    cotizacion.precio_total_calculado = precio_base + servicios_extra_total
     cotizacion.save(update_fields=['precio_base', 'precio_servicios_extra', 'precio_total_calculado'])
 
     # Predecir precio con IA si está habilitado
@@ -49,7 +71,9 @@ def calcular_precio_cotizacion(cotizacion: Cotizacion, usar_ia: bool = True) -> 
 
     return {
         'precio_base': float(precio_base),
-        'precio_servicios_extra': float(servicios_extra),
+        'precio_servicios_extra': float(servicios_extra_total),
+        'recargo_embalaje': float(recargo_embalaje),
+        'solicita_embalaje': cotizacion.solicita_embalaje,
         'precio_total_calculado': float(cotizacion.precio_total_calculado),
         'precio_predicho_ia': prediccion_ia['precio_predicho'] if prediccion_ia else None,
         'confianza_ia': prediccion_ia['confianza'] if prediccion_ia else None,

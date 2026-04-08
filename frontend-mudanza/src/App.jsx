@@ -28,6 +28,7 @@ import MisReservas from './pages/MisReservas'
 import MisPagos from './pages/MisPagos'
 import CrmPipeline from './pages/CrmPipeline'
 import CrmInformes from './pages/CrmInformes'
+import Incidencias from './pages/Incidencias'
 
 function AppRoutes() {
   const { user, loading } = useAuth()
@@ -58,6 +59,7 @@ function AppRoutes() {
                 <Route path="/cotizaciones" element={<ProtectedRoute denyRoles={['cliente']}><Cotizaciones /></ProtectedRoute>} />
                 <Route path="/reservas" element={<ProtectedRoute denyRoles={['cliente']}><Reservas /></ProtectedRoute>} />
                 <Route path="/mudanzas" element={<ProtectedRoute denyRoles={['cliente']}><Mudanzas /></ProtectedRoute>} />
+                <Route path="/incidencias" element={<ProtectedRoute denyRoles={['cliente']}><Incidencias /></ProtectedRoute>} />
                 <Route path="/pagos" element={<ProtectedRoute denyRoles={['cliente']}><Pagos /></ProtectedRoute>} />
                 <Route path="/zonas" element={<ProtectedRoute denyRoles={['cliente']}><Zonas /></ProtectedRoute>} />
                 <Route path="/servicios" element={<ProtectedRoute denyRoles={['cliente']}><Servicios /></ProtectedRoute>} />

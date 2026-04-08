@@ -71,7 +71,29 @@ class UsuarioRegistroSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         password = validated_data.pop('password')
+
+        # Obtener o crear el rol 'cliente'
+        rol_cliente, _ = Rol.objects.get_or_create(
+            nombre='cliente',
+            defaults={
+                'descripcion': 'Cliente del sistema (app móvil y portal)',
+                'es_activo': True
+            }
+        )
+
+        # Crear usuario con rol de cliente
         user = Usuario.objects.create_user(**validated_data, password=password)
+        user.rol = rol_cliente
+        user.save(update_fields=['rol'])
+
+        # Crear perfil de Cliente asociado
+        from apps.clientes.models import Cliente
+        Cliente.objects.create(
+            usuario=user,
+            tipo_cliente='residencial',
+            preferencia_comunicacion='email'
+        )
+
         return user
 
 
@@ -98,12 +120,13 @@ class BitacoraAdminSerializer(BitacoraSerializer):
 
 class UsuarioPerfilSerializer(serializers.ModelSerializer):
     rol_nombre = serializers.CharField(source='rol.nombre', read_only=True, allow_null=True)
+    nombre_completo = serializers.CharField(read_only=True)
     permisos = serializers.SerializerMethodField()
 
     class Meta:
         model = Usuario
         fields = (
-            'id', 'email', 'nombre', 'apellido', 'telefono', 'avatar_url',
+            'id', 'email', 'nombre', 'apellido', 'nombre_completo', 'telefono', 'avatar_url',
             'preferencias_comunicacion', 'rol', 'rol_nombre', 'is_staff', 'permisos',
         )
         read_only_fields = ('email', 'permisos')

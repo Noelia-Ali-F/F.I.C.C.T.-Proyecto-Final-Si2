@@ -87,24 +87,23 @@ class RandomForestService:
         """
         modelo = RandomForestService.obtener_modelo_activo('prediccion_precio')
 
-        # Features
-        tarifa_base = float(cotizacion.precio_base)
-        factor_servicio = float(cotizacion.tipo_servicio.factor_precio)
+        # precio_base en BD ya incluye factor del tipo de servicio; no volver a multiplicar por factor_servicio
         volumen = float(cotizacion.volumen_total_m3)
         peso = float(cotizacion.peso_total_kg)
         cantidad_objetos = cotizacion.cantidad_objetos
         mes = cotizacion.fecha_deseada.month if cotizacion.fecha_deseada else timezone.now().month
         dia_semana = cotizacion.fecha_deseada.weekday() if cotizacion.fecha_deseada else 0
 
-        # Simulación: agregar factor de demanda según día/mes
         factor_demanda = 1.0
-        if dia_semana >= 5:  # Fin de semana
+        if dia_semana >= 5:
             factor_demanda += 0.15
-        if mes in [11, 12, 1]:  # Fin/inicio de año
+        if mes in [11, 12, 1]:
             factor_demanda += 0.10
 
-        precio_predicho = tarifa_base * factor_servicio * factor_demanda
-        precio_predicho += float(cotizacion.precio_servicios_extra or 0)
+        subtotal = float(cotizacion.precio_base) + float(cotizacion.precio_servicios_extra or 0)
+        precio_predicho = subtotal * factor_demanda
+        if getattr(cotizacion, 'solicita_embalaje', False):
+            precio_predicho *= 1.05
 
         # Guardar en cotización
         cotizacion.rf_precio_predicho = Decimal(str(round(precio_predicho, 2)))
@@ -119,16 +118,17 @@ class RandomForestService:
                 entidad_tipo='Cotizacion',
                 entidad_id=cotizacion.id,
                 features_entrada={
-                    'zona_origen': cotizacion.zona_origen.nombre,
-                    'zona_destino': cotizacion.zona_destino.nombre,
+                    'zona_origen': cotizacion.zona_origen.nombre if cotizacion.zona_origen else None,
+                    'zona_destino': cotizacion.zona_destino.nombre if cotizacion.zona_destino else None,
                     'volumen_m3': volumen,
                     'peso_kg': peso,
                     'cantidad_objetos': cantidad_objetos,
-                    'tipo_servicio': cotizacion.tipo_servicio.nombre,
+                    'tipo_servicio': cotizacion.tipo_servicio.nombre if cotizacion.tipo_servicio else None,
                     'mes': mes,
-                    'dia_semana': dia_semana
+                    'dia_semana': dia_semana,
+                    'solicita_embalaje': bool(getattr(cotizacion, 'solicita_embalaje', False)),
                 },
-                valor_predicho=float(precio_predicho),
+                valor_predicho={'precio': float(precio_predicho)},
                 confianza=Decimal('0.87')
             )
 
@@ -222,8 +222,11 @@ class RandomForestService:
             retro.valor_real = valor_real
 
             # Calcular error si es numérico
-            if isinstance(valor_real, (int, float, Decimal)) and isinstance(retro.valor_predicho, (int, float, Decimal)):
-                vp = float(retro.valor_predicho)
+            vp_raw = retro.valor_predicho
+            if isinstance(vp_raw, dict) and 'precio' in vp_raw:
+                vp_raw = vp_raw['precio']
+            if isinstance(valor_real, (int, float, Decimal)) and isinstance(vp_raw, (int, float, Decimal)):
+                vp = float(vp_raw)
                 vr = float(valor_real)
                 retro.error_absoluto = abs(vp - vr)
                 if vr != 0:

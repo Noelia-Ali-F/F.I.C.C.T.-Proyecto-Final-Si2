@@ -1,4 +1,6 @@
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import serializers
+
 from .models import MetodoPago, Pago, Factura, Reembolso
 
 
@@ -15,6 +17,19 @@ class PagoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Pago
         fields = '__all__'
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and instance.comprobante:
+            ret['comprobante_url'] = request.build_absolute_uri(instance.comprobante.url)
+        else:
+            ret['comprobante_url'] = ret.get('comprobante')
+        try:
+            ret['factura_id'] = instance.factura.id
+        except ObjectDoesNotExist:
+            ret['factura_id'] = None
+        return ret
 
 
 class PagoCreateSerializer(serializers.ModelSerializer):

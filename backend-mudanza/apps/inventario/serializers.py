@@ -17,6 +17,20 @@ class ObjetoMudanzaSerializer(serializers.ModelSerializer):
         model = ObjetoMudanza
         fields = '__all__'
 
+    def to_internal_value(self, data):
+        data = data.copy() if hasattr(data, 'copy') else dict(data)
+        if data.get('categoria_id') is not None and 'categoria' not in data:
+            data['categoria'] = data['categoria_id']
+        for app_key, model_key in (
+            ('largo', 'largo_cm'),
+            ('ancho', 'ancho_cm'),
+            ('alto', 'alto_cm'),
+            ('peso', 'peso_kg'),
+        ):
+            if app_key in data and model_key not in data:
+                data[model_key] = data[app_key]
+        return super().to_internal_value(data)
+
     def validate(self, attrs):
         request = self.context.get('request')
         cot = attrs.get('cotizacion')
@@ -26,6 +40,23 @@ class ObjetoMudanzaSerializer(serializers.ModelSerializer):
             if cot.cliente.usuario_id != request.user.id:
                 raise serializers.ValidationError({'cotizacion': 'No puede usar esta cotización.'})
         return attrs
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['largo'] = data.get('largo_cm')
+        data['ancho'] = data.get('ancho_cm')
+        data['alto'] = data.get('alto_cm')
+        data['peso'] = data.get('peso_kg')
+        request = self.context.get('request')
+        foto = instance.fotos.filter(tipo_foto='antes_traslado').first()
+        if not foto:
+            foto = instance.fotos.first()
+        if foto and foto.foto:
+            url = foto.foto.url
+            data['foto_url'] = request.build_absolute_uri(url) if request else url
+        else:
+            data['foto_url'] = None
+        return data
 
 
 class FotoObjetoSerializer(serializers.ModelSerializer):

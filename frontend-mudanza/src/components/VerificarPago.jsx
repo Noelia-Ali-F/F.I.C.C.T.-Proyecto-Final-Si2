@@ -1,172 +1,153 @@
-import React, { useState } from 'react';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
-import apiClient from '../api/client';
+import React, { useState } from 'react'
+import api from '../api/client'
+import FormInput from './FormInput'
 
-const VerificarPago = ({ pago, onVerificado }) => {
-  const [loading, setLoading] = useState(false);
+function formatoRegistro(iso) {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return String(iso)
+  return d.toLocaleString('es-BO', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+export default function VerificarPago({ pago, onVerificado }) {
+  const [loading, setLoading] = useState(false)
+  const [referenciaBanco, setReferenciaBanco] = useState(pago.referencia_transaccion || '')
+
+  const imgSrc = pago.comprobante_url || pago.comprobante
 
   const handleVerificar = async () => {
-    if (!window.confirm('¿Confirmar que el pago es válido?')) return;
-
-    setLoading(true);
+    if (!window.confirm('¿Confirmar que el comprobante es válido? La reserva pasará a confirmada si es un depósito.')) return
+    setLoading(true)
     try {
-      await apiClient.post(`/pagos/${pago.id}/verificar/`);
-      alert('Pago verificado exitosamente. Se generó la factura automáticamente.');
-      onVerificado?.();
+      await api.post(`/pagos/${pago.id}/verificar/`, {
+        referencia_transaccion: referenciaBanco.trim() || undefined,
+      })
+      alert('Pago verificado. Se generó la factura en PDF y se notificó al cliente.')
+      onVerificado?.()
     } catch (error) {
-      console.error('Error al verificar pago:', error);
-      alert('Error al verificar el pago');
+      console.error(error)
+      const d = error.response?.data
+      const msg = typeof d === 'object' && d?.error ? d.error : error.message
+      alert(msg || 'Error al verificar el pago')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const handleRechazar = async () => {
-    if (!window.confirm('¿Rechazar este pago? El cliente deberá volver a subir el comprobante.'))
-      return;
-
-    setLoading(true);
+    if (!window.confirm('¿Rechazar este pago? El cliente podrá subir un nuevo comprobante.')) return
+    setLoading(true)
     try {
-      await apiClient.post(`/pagos/${pago.id}/rechazar/`);
-      alert('Pago rechazado. Se notificó al cliente.');
-      onVerificado?.();
+      await api.post(`/pagos/${pago.id}/rechazar/`)
+      alert('Pago rechazado. Se notificó al cliente.')
+      onVerificado?.()
     } catch (error) {
-      console.error('Error al rechazar pago:', error);
-      alert('Error al rechazar el pago');
+      console.error(error)
+      alert('Error al rechazar el pago')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   return (
-    <div className="verificar-pago max-w-2xl mx-auto p-6 bg-white rounded-lg shadow">
-      <h2 className="text-2xl font-bold mb-6">Verificación de Pago</h2>
-
-      {/* Información del pago */}
-      <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <span className="text-gray-600">Reserva:</span>{' '}
-            <span className="font-medium">{pago.reserva_codigo}</span>
-          </div>
-          <div>
-            <span className="text-gray-600">Tipo:</span>{' '}
-            <span className="font-medium capitalize">{pago.tipo_pago}</span>
-          </div>
-          <div>
-            <span className="text-gray-600">Método:</span>{' '}
-            <span className="font-medium">{pago.metodo_nombre}</span>
-          </div>
-          <div>
-            <span className="text-gray-600">Monto:</span>{' '}
-            <span className="font-bold text-lg">
-              Bs {parseFloat(pago.monto).toLocaleString('es-BO', { minimumFractionDigits: 2 })}
-            </span>
-          </div>
-          <div>
-            <span className="text-gray-600">Fecha subida:</span>{' '}
-            <span className="font-medium">
-              {format(new Date(pago.creado_en), "d 'de' MMMM, h:mm a", { locale: es })}
-            </span>
-          </div>
-          {pago.referencia_transaccion && (
-            <div>
-              <span className="text-gray-600">Referencia:</span>{' '}
-              <span className="font-medium font-mono text-xs">{pago.referencia_transaccion}</span>
-            </div>
-          )}
+    <div className="space-y-4 text-slate-200">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm rounded-lg border border-slate-700 bg-slate-900/50 p-4">
+        <div>
+          <span className="text-slate-500">Reserva</span>
+          <p className="font-medium text-amber-400">{pago.reserva_codigo}</p>
         </div>
+        <div>
+          <span className="text-slate-500">Tipo</span>
+          <p className="font-medium capitalize">{pago.tipo_pago}</p>
+        </div>
+        <div>
+          <span className="text-slate-500">Método</span>
+          <p className="font-medium">{pago.metodo_nombre}</p>
+        </div>
+        <div>
+          <span className="text-slate-500">Monto</span>
+          <p className="font-bold text-lg text-white">
+            Bs {parseFloat(pago.monto).toLocaleString('es-BO', { minimumFractionDigits: 2 })}
+          </p>
+        </div>
+        {pago.creado_en && (
+          <div className="sm:col-span-2">
+            <span className="text-slate-500">Registrado</span>
+            <p className="font-medium">{formatoRegistro(pago.creado_en)}</p>
+          </div>
+        )}
       </div>
 
-      {/* Comprobante */}
-      {pago.comprobante && (
-        <div className="mb-6">
-          <h3 className="font-semibold mb-3">Comprobante</h3>
-          <div className="border rounded-lg overflow-hidden">
+      {imgSrc ? (
+        <div>
+          <h3 className="font-semibold text-slate-300 mb-2">Comprobante</h3>
+          <div className="border border-slate-700 rounded-lg overflow-hidden bg-slate-900">
             <img
-              src={pago.comprobante}
-              alt="Comprobante de pago"
-              className="w-full h-auto"
-              style={{ maxHeight: '600px', objectFit: 'contain' }}
+              src={imgSrc}
+              alt="Comprobante"
+              className="w-full max-h-[480px] object-contain"
             />
           </div>
           <a
-            href={pago.comprobante}
+            href={imgSrc}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-2 inline-block text-sm text-blue-600 hover:underline"
+            className="text-sm text-amber-400 hover:underline mt-2 inline-block"
           >
-            Abrir en nueva ventana →
+            Abrir imagen en nueva pestaña
           </a>
         </div>
+      ) : (
+        <p className="text-sm text-slate-500">Sin archivo de comprobante adjunto.</p>
       )}
 
-      {/* Checklist de verificación */}
-      <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-        <h3 className="font-semibold mb-3 text-yellow-800">Checklist de Verificación</h3>
-        <ul className="space-y-2 text-sm">
-          <li className="flex items-start">
-            <input type="checkbox" className="mt-1 mr-2" />
-            <span>El monto coincide con lo esperado (Bs {parseFloat(pago.monto).toFixed(2)})</span>
-          </li>
-          <li className="flex items-start">
-            <input type="checkbox" className="mt-1 mr-2" />
-            <span>La fecha de transferencia es reciente</span>
-          </li>
-          <li className="flex items-start">
-            <input type="checkbox" className="mt-1 mr-2" />
-            <span>El número de referencia es válido (si aplica)</span>
-          </li>
-          <li className="flex items-start">
-            <input type="checkbox" className="mt-1 mr-2" />
-            <span>El comprobante es legible y auténtico</span>
-          </li>
-          <li className="flex items-start">
-            <input type="checkbox" className="mt-1 mr-2" />
-            <span>La cuenta de destino es correcta</span>
-          </li>
+      <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-4 text-sm text-yellow-200/90">
+        <p className="font-medium text-yellow-400 mb-2">Checklist (operador)</p>
+        <ul className="list-disc list-inside space-y-1 text-slate-300">
+          <li>Monto coincide con el depósito / saldo esperado</li>
+          <li>Fecha de transferencia reciente</li>
+          <li>Referencia legible (si aplica)</li>
+          <li>Cuenta de destino correcta</li>
         </ul>
       </div>
 
-      {/* Información adicional según tipo de pago */}
       {pago.tipo_pago === 'deposito' && (
-        <div className="mb-6 p-3 bg-blue-50 rounded-lg text-sm text-blue-800">
-          <p>
-            ℹ️ Al verificar este depósito, la reserva pasará automáticamente a estado{' '}
-            <strong>CONFIRMADA</strong> y se generará la factura del depósito.
-          </p>
-        </div>
+        <p className="text-sm text-sky-300/90 bg-sky-500/10 border border-sky-500/20 rounded-lg p-3">
+          Al verificar el depósito, la reserva pasa a <strong>confirmada</strong> y se emite factura con IVA.
+        </p>
       )}
 
-      {pago.tipo_pago === 'saldo' && (
-        <div className="mb-6 p-3 bg-green-50 rounded-lg text-sm text-green-800">
-          <p>
-            ℹ️ Al verificar este pago de saldo, se generará la factura final y el servicio quedará
-            cerrado.
-          </p>
-        </div>
-      )}
+      <FormInput
+        label="Referencia banco (opcional, actualiza el registro al verificar)"
+        name="ref"
+        value={referenciaBanco}
+        onChange={(e) => setReferenciaBanco(e.target.value)}
+        placeholder="Ej. número de operación del banco"
+      />
 
-      {/* Botones de acción */}
-      <div className="flex gap-4">
+      <div className="flex flex-col sm:flex-row gap-3 pt-2">
         <button
+          type="button"
           onClick={handleVerificar}
           disabled={loading}
-          className="flex-1 bg-green-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-400"
+          className="flex-1 py-3 px-4 rounded-lg font-medium bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50"
         >
-          {loading ? 'Verificando...' : '✓ Verificar Pago'}
+          {loading ? 'Procesando…' : 'Confirmar pago'}
         </button>
         <button
+          type="button"
           onClick={handleRechazar}
           disabled={loading}
-          className="flex-1 bg-red-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-red-700 disabled:bg-gray-400"
+          className="flex-1 py-3 px-4 rounded-lg font-medium bg-red-600/80 hover:bg-red-600 text-white disabled:opacity-50"
         >
-          {loading ? 'Rechazando...' : '✗ Rechazar'}
+          Rechazar
         </button>
       </div>
     </div>
-  );
-};
-
-export default VerificarPago;
+  )
+}

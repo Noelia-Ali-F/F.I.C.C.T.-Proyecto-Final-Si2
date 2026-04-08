@@ -97,7 +97,7 @@ export default function Cotizaciones() {
         const id = res.data?.id
         fetch()
         setFormModal({ open: false, cot: null })
-        if (!isEditing && id) api.post(`/cotizaciones/${id}/calcular_precio/`).catch(() => {})
+        if (!isEditing && id) api.post(`/cotizaciones/${id}/calcular-precio/`).catch(() => {})
       })
       .catch((err) => setErrors(err.response?.data || {}))
       .finally(() => setSaving(false))
@@ -130,7 +130,7 @@ export default function Cotizaciones() {
   }
 
   const recalcular = (id) => {
-    api.post(`/cotizaciones/${id}/calcular_precio/`).then(() => fetch())
+    api.post(`/cotizaciones/${id}/calcular-precio/`).then(() => fetch())
   }
 
   const columns = [

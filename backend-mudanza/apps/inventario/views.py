@@ -1,6 +1,8 @@
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -22,6 +24,10 @@ class CategoriaObjetoViewSet(viewsets.ModelViewSet):
     search_fields = ('nombre',)
 
     def get_permissions(self):
+        u = self.request.user
+        # Cliente portal (app / web): catálogo de lectura sin permiso inventario.* asignado en rol
+        if es_cliente_portal(u) and self.action in ('list', 'retrieve'):
+            return [IsAuthenticated()]
         if self.action in ('list', 'retrieve'):
             return [
                 IsAuthenticated(),
@@ -45,6 +51,10 @@ class ObjetoMudanzaViewSet(viewsets.ModelViewSet):
         return qs
 
     def get_permissions(self):
+        u = self.request.user
+        if es_cliente_portal(u):
+            # Solo ve/edita objetos de sus cotizaciones (get_queryset); mismo criterio que CotizacionViewSet.objetos
+            return [IsAuthenticated()]
         if self.action in ('list', 'retrieve'):
             return [
                 IsAuthenticated(),
@@ -54,6 +64,17 @@ class ObjetoMudanzaViewSet(viewsets.ModelViewSet):
             IsAuthenticated(),
             TieneAlgunoDe('inventario.registrar_objetos', 'inventario.editar'),
         ]
+
+    @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
+    def foto(self, request, pk=None):
+        """Sube una foto asociada al objeto (alias esperado por la app móvil)."""
+        obj = self.get_object()
+        archivo = request.FILES.get('foto')
+        if not archivo:
+            return Response({'foto': ['Archivo requerido']}, status=status.HTTP_400_BAD_REQUEST)
+        tipo = request.data.get('tipo_foto') or 'antes_traslado'
+        FotoObjeto.objects.create(objeto=obj, foto=archivo, tipo_foto=tipo)
+        return Response(ObjetoMudanzaSerializer(obj).data, status=status.HTTP_201_CREATED)
 
     def perform_create(self, serializer):
         obj = serializer.save()

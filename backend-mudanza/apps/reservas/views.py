@@ -83,3 +83,20 @@ class ReservaViewSet(viewsets.ModelViewSet):
         reserva.save()
         return Response(ReservaSerializer(reserva).data)
 
+    @action(detail=False, methods=['get'])
+    def sin_servicio(self, request):
+        """Lista reservas confirmadas sin servicio asignado (Fase 5 del flujo)"""
+        reservas = self.get_queryset().filter(
+            estado='confirmada'
+        ).exclude(
+            servicio__isnull=False
+        ).select_related('cliente__usuario', 'cotizacion', 'cotizacion__zona_origen', 'cotizacion__zona_destino')
+
+        page = self.paginate_queryset(reservas)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(reservas, many=True)
+        return Response(serializer.data)
+

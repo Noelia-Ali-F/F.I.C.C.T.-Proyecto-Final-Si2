@@ -12,12 +12,21 @@ class Cotizacion(models.Model):
 
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name='cotizaciones')
     direccion_origen = models.TextField()
+    latitud_origen = models.FloatField(null=True, blank=True, help_text='Coordenada GPS origen')
+    longitud_origen = models.FloatField(null=True, blank=True, help_text='Coordenada GPS origen')
     zona_origen = models.ForeignKey(Zona, on_delete=models.SET_NULL, null=True, related_name='cotizaciones_origen')
     direccion_destino = models.TextField()
+    latitud_destino = models.FloatField(null=True, blank=True, help_text='Coordenada GPS destino')
+    longitud_destino = models.FloatField(null=True, blank=True, help_text='Coordenada GPS destino')
     zona_destino = models.ForeignKey(Zona, on_delete=models.SET_NULL, null=True, related_name='cotizaciones_destino')
     tipo_servicio = models.ForeignKey(TipoServicio, on_delete=models.PROTECT, related_name='cotizaciones')
     fecha_deseada = models.DateField(null=True, blank=True)
     franja_horaria = models.CharField(max_length=20, blank=True)
+    descripcion = models.TextField(blank=True, help_text='Descripción de lo que se desea trasladar')
+    solicita_embalaje = models.BooleanField(
+        default=False,
+        help_text='Cliente solicita embalaje/refuerzo; se suma al precio y la IA lo considera',
+    )
 
     volumen_total_m3 = models.DecimalField(max_digits=10, decimal_places=4, default=0)
     peso_total_kg = models.DecimalField(max_digits=10, decimal_places=2, default=0)

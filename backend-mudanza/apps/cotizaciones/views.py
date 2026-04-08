@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -9,6 +10,21 @@ from apps.usuarios.permissions import TieneAlgunoDe
 from .models import Cotizacion, CotizacionServicioAdicional
 from .serializers import CotizacionSerializer, CotizacionCreateSerializer, CotizacionServicioAdicionalSerializer
 from .services import calcular_precio_cotizacion, agregar_servicio_adicional, enviar_cotizacion, aceptar_cotizacion
+
+
+def _parse_solicita_embalaje_desde_request(data):
+    if not data:
+        return None
+    for key in ('solicita_embalaje', 'solicitaEmbalaje'):
+        if key not in data:
+            continue
+        v = data.get(key)
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.strip().lower() in ('1', 'true', 'yes', 'si', 'sí', 'on')
+        return bool(v)
+    return None
 
 
 def _es_cliente_portal(user):
@@ -45,7 +61,19 @@ class CotizacionViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         u = self.request.user
         if _es_cliente_portal(u):
-            if self.action in ('list', 'retrieve', 'create', 'update', 'partial_update'):
+            acciones_cliente = (
+                'list',
+                'retrieve',
+                'create',
+                'update',
+                'partial_update',
+                'destroy',
+                'aceptar',
+                'calcular_precio',
+                'agregar_servicio',
+                'objetos',
+            )
+            if self.action in acciones_cliente:
                 return [IsAuthenticated()]
             return [IsAuthenticated(), TieneAlgunoDe('crm.editar_clientes', 'crm.registro_cliente')]
         if self.action in ('aceptar', 'rechazar'):
@@ -66,6 +94,16 @@ class CotizacionViewSet(viewsets.ModelViewSet):
             return CotizacionCreateSerializer
         return CotizacionSerializer
 
+    def destroy(self, request, *args, **kwargs):
+        if _es_cliente_portal(request.user):
+            cotizacion = self.get_object()
+            if cotizacion.estado != 'borrador':
+                return Response(
+                    {'detail': 'Solo puedes eliminar cotizaciones en estado borrador.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        return super().destroy(request, *args, **kwargs)
+
     def perform_create(self, serializer):
         if _es_cliente_portal(self.request.user):
             from apps.clientes.models import Cliente
@@ -78,12 +116,51 @@ class CotizacionViewSet(viewsets.ModelViewSet):
             cotizacion = serializer.save()
         calcular_precio_cotizacion(cotizacion)
 
-    @action(detail=True, methods=['post'])
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='calcular-precio',
+        parser_classes=[JSONParser, FormParser, MultiPartParser],
+    )
     def calcular_precio(self, request, pk=None):
-        """Recalcula el precio de la cotización."""
+        """Recalcula el precio. POST .../calcular-precio/ — Body JSON opcional: {\"solicita_embalaje\": true}."""
         cotizacion = self.get_object()
+        flag = _parse_solicita_embalaje_desde_request(request.data)
+        if flag is not None:
+            cotizacion.solicita_embalaje = flag
+            cotizacion.save(update_fields=['solicita_embalaje'])
         resultado = calcular_precio_cotizacion(cotizacion)
         return Response(resultado)
+
+    @action(
+        detail=True,
+        methods=['get', 'post'],
+        url_path='objetos',
+        parser_classes=[JSONParser, MultiPartParser, FormParser],
+    )
+    def objetos(self, request, pk=None):
+        """Lista o crea objetos de inventario bajo la cotización (app cliente / flujo operativo)."""
+        from apps.inventario.models import FotoObjeto, ObjetoMudanza
+        from apps.inventario.serializers import ObjetoMudanzaSerializer
+        from apps.inventario.services_inventario import aplicar_clasificacion_y_riesgo
+
+        cotizacion = self.get_object()
+        if request.method == 'GET':
+            objs = ObjetoMudanza.objects.filter(cotizacion=cotizacion).select_related('categoria')
+            return Response(ObjetoMudanzaSerializer(objs, many=True).data)
+        # La app envía solo el objeto; la cotización viene de la URL. Sin esto, is_valid() exige `cotizacion` en el body.
+        data = request.data.copy()
+        if hasattr(data, '_mutable'):
+            data._mutable = True
+        data['cotizacion'] = cotizacion.pk
+        serializer = ObjetoMudanzaSerializer(data=data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        obj = serializer.save()
+        foto = request.FILES.get('foto')
+        if foto:
+            FotoObjeto.objects.create(objeto=obj, foto=foto, tipo_foto='antes_traslado')
+        aplicar_clasificacion_y_riesgo(obj)
+        return Response(ObjetoMudanzaSerializer(obj).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
     def enviar(self, request, pk=None):

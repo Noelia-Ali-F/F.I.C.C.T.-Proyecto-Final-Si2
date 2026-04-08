@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import api from '../api/client'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
@@ -7,7 +8,8 @@ import FormSelect from '../components/FormSelect'
 import { useAuth } from '../context/AuthContext'
 
 export default function Reservas() {
-  const { isAdmin } = useAuth()
+  const { isAdmin, hasRole } = useAuth()
+  const esClientePortal = hasRole('cliente')
   const [reservas, setReservas] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState({ open: false, r: null })
@@ -76,7 +78,15 @@ export default function Reservas() {
             <p><span className="text-slate-500">Franja:</span> {modal.r.franja_horaria}</p>
             {modal.r.estado === 'pendiente' && (
               <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-sm text-yellow-400">
-                ⏳ Esperando pago del depósito. La reserva se confirmará automáticamente cuando se verifique el pago.
+                ⏳ Esperando pago del depósito. La reserva se confirmará cuando el operador verifique tu comprobante.
+                {esClientePortal && (
+                  <span className="block mt-2 text-amber-300">
+                    <Link to="/mis-pagos" className="underline font-medium">
+                      Mis pagos
+                    </Link>{' '}
+                    — sube el comprobante desde la app o consulta el estado aquí.
+                  </span>
+                )}
               </div>
             )}
             {modal.r.estado === 'confirmada' && (

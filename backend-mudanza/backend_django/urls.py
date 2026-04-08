@@ -8,8 +8,12 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
     SpectacularRedocView,
 )
+from .views import api_root
 
 urlpatterns = [
+    # Raíz de la API - Info general
+    path('', api_root, name='api-root'),
+
     path('admin/', admin.site.urls),
 
     # Documentación de la API (acceso público para explorar)
@@ -17,7 +21,7 @@ urlpatterns = [
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema', permission_classes=[AllowAny]), name='swagger'),
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema', permission_classes=[AllowAny]), name='redoc'),
 
-    # Apps del sistema (cada una con su prefijo)
+    # Apps del sistema - Portal Web (cada una con su prefijo)
     path('api/auth/', include('apps.usuarios.urls')),
     path('api/clientes/', include('apps.clientes.urls')),
     path('api/zonas/', include('apps.zonas.urls')),
@@ -34,6 +38,9 @@ urlpatterns = [
     path('api/notificaciones/', include('apps.notificaciones.urls')),
     path('api/reportes/', include('apps.reportes.urls')),
     path('api/ia/', include('apps.ia.urls')),
+
+    # App móvil cliente (rutas distintas al portal web /api/...)
+    path('api/app-cliente/', include('apps.app_cliente.urls')),
 ]
 
 if settings.DEBUG:

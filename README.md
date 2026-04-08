@@ -234,46 +234,40 @@ python manage.py runserver 0.0.0.0:8000
 - **Estilos**: Tailwind CSS
 - **Linting**: ESLint
 
-### Estructura de carpetas
+### Estructura de carpetas real
 
 ```
 src/
-├── pages/                    # Páginas principales
-│   ├── Auth/                 # Login, Registro
-│   ├── Dashboard/            # Inicio
-│   ├── Clientes/             # Gestión de clientes
-│   ├── Cotizaciones/         # Cotizaciones
-│   ├── Reservas/             # Reservas
-│   ├── Mudanzas/             # Mudanzas
-│   ├── Pagos/                # Pagos
-│   ├── CRM/                  # CRM Pipeline e informes
-│   ├── Admin/                # Usuarios, roles, configuración
-│   ├── Catalogs/             # Zonas, servicios, inventario, vehículos, personal
-│   ├── Cliente/              # Mis cotizaciones, mis reservas, mis pagos
-│   ├── Chatbot/              # Chatbot
-│   ├── Reportes/             # Reportes
-│   └── Perfil/               # Perfil de usuario
-│
-├── components/               # Componentes reutilizables
-│   ├── Forms/                # Componentes de formularios
-│   ├── Tables/               # Componentes de tablas
-│   ├── Modals/               # Componentes de modales
-│   ├── ProtectedRoute/       # Rutas protegidas por rol
-│   └── ...
-│
-├── layouts/
-│   └── MainLayout/           # Layout principal con navbar y sidebar
-│
-├── context/
-│   └── AuthContext/          # Contexto de autenticación
-│
-├── api/
-│   └── client.js             # Cliente HTTP configurado
-│
-├── App.jsx                   # Definición de rutas
+├── pages/                    # Páginas del sistema (archivos .jsx)
+├── components/               # Formularios, tablas, modales y flujos auxiliares
+├── layouts/                  # MainLayout con sidebar y header
+├── context/                  # AuthContext y helpers de roles/permisos
+├── api/                      # Cliente Axios
+├── App.jsx                   # Rutas protegidas
 ├── main.jsx                  # Punto de entrada
 └── index.css                 # Estilos globales
 ```
+
+### Visibilidad de botones y módulos
+
+No todos los botones del frontend se muestran para todos los usuarios. El menú lateral y varias acciones internas dependen del rol y de los permisos recibidos desde `GET /api/auth/perfil/`.
+
+- `cliente`: ve solo `Inicio`, `Mis Cotizaciones`, `Mis Reservas`, `Mi inventario`, `Mis Pagos` y `Chat`.
+- `operador`: ve módulos operativos como `Clientes`, `Cotizaciones`, `Reservas`, `Mudanzas`, `Pagos`, `Inventario`, `Reportes` y `Usuarios`.
+- `admin` o `administrador`: además ve `Roles y permisos`, `Configuración` y `Bitácora`.
+- `Pipeline CRM` solo aparece si el usuario es `staff` o tiene `crm.pipeline_solicitudes`.
+- `Informes CRM` solo aparece si el usuario es `staff` o tiene `crm.reportes_comportamiento`.
+
+Si faltan botones tras instalar el proyecto, primero ejecuta:
+
+```bash
+cd backend-mudanza
+python manage.py migrate
+python manage.py poblar_configuracion_inicial
+python manage.py seed_data
+```
+
+`seed_data` crea los roles y permisos usados por el menú. Si no se ejecuta, varias opciones pueden no aparecer.
 
 ### Comandos útiles del Frontend
 

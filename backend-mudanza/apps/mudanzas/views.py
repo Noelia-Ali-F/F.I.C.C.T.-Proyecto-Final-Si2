@@ -1,15 +1,23 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
-from rest_framework.parsers import FormParser, MultiPartParser
+import base64
+import binascii
+
+from django.core.files.base import ContentFile
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
+from django.db.models import Prefetch
 from django.utils import timezone
 
 from apps.inventario.access import es_cliente_portal
+from apps.personal.models import Personal
 from apps.usuarios.permissions import TieneAlgunoDe, TienePermiso
 from apps.ia.services import RandomForestService
 from apps.notificaciones.services import NotificacionService
+from apps.carga.services import PlanCargaService
+from apps.inventario.models import FotoObjeto, ObjetoMudanza
 
 from .models import (
     ServicioMudanza,
@@ -43,13 +51,41 @@ class ServicioMudanzaViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = ServicioMudanza.objects.select_related(
-            'reserva', 'reserva__cliente__usuario', 'vehiculo', 'rf_tipo_contenedor_recomendado'
-        ).prefetch_related('equipo__personal__usuario', 'confirmacion__fotos').order_by('-creado_en')
+            'reserva',
+            'reserva__cotizacion',
+            'reserva__cotizacion__zona_origen',
+            'reserva__cotizacion__zona_destino',
+            'reserva__cliente__usuario',
+            'vehiculo',
+            'vehiculo__tipo_contenedor',
+            'rf_tipo_contenedor_recomendado',
+        ).prefetch_related(
+            'equipo__personal__usuario',
+            'confirmacion__fotos',
+            Prefetch(
+                'historial_estados',
+                queryset=HistorialEstadoServicio.objects.select_related('cambiado_por').order_by(
+                    'creado_en'
+                ),
+            ),
+            Prefetch(
+                'reserva__cotizacion__objetos',
+                queryset=ObjetoMudanza.objects.prefetch_related(
+                    Prefetch('fotos', queryset=FotoObjeto.objects.order_by('id'))
+                ),
+            ),
+        ).order_by('-creado_en')
         u = self.request.user
         if u.is_superuser or u.is_staff:
             return qs
         if es_cliente_portal(u):
             return qs.filter(reserva__cliente__usuario=u)
+        # Conductor/cargador: solo servicios donde está en el equipo
+        try:
+            personal = Personal.objects.get(usuario=u)
+            return qs.filter(equipo__personal=personal).distinct()
+        except Personal.DoesNotExist:
+            pass
         return qs
 
     def get_permissions(self):
@@ -58,6 +94,21 @@ class ServicioMudanzaViewSet(viewsets.ModelViewSet):
             if self.action in ('list', 'retrieve', 'confirmar_entrega', 'calificar', 'reportar_incidencia'):
                 return [IsAuthenticated()]
             return [IsAuthenticated(), DenyAny()]
+        # App conductor: personal asignado no suele tener reservas.gestionar
+        es_personal = Personal.objects.filter(usuario=u).exists()
+        acciones_conductor = (
+            'mis_servicios',
+            'cambiar_estado',
+            'marcar_item_carga',
+            'plan_carga_detalle',
+            'confirmar_entrega',
+            'reportar_incidencia',
+        )
+        if self.action in acciones_conductor and es_personal:
+            return [IsAuthenticated()]
+        # Detalle por ID: el queryset ya limita a servicios del personal
+        if self.action == 'retrieve' and es_personal:
+            return [IsAuthenticated()]
         if self.action in ('list', 'retrieve'):
             return [IsAuthenticated(), TieneAlgunoDe('reservas.gestionar', 'reservas.ver', 'crm.pipeline_solicitudes')]
         if self.action == 'create':
@@ -75,6 +126,45 @@ class ServicioMudanzaViewSet(viewsets.ModelViewSet):
         # Ejecutar predicciones de IA
         RandomForestService.recomendar_contenedor(servicio)
         return servicio
+
+    @action(detail=True, methods=['post'])
+    def asignar_vehiculo(self, request, pk=None):
+        """Asigna vehículo al servicio (Fase 5 del flujo)"""
+        from apps.vehiculos.models import Vehiculo
+        servicio = self.get_object()
+        vehiculo_id = request.data.get('vehiculo_id')
+
+        if not vehiculo_id:
+            return Response(
+                {'error': 'vehiculo_id es requerido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            vehiculo = Vehiculo.objects.get(pk=vehiculo_id)
+        except Vehiculo.DoesNotExist:
+            return Response(
+                {'error': 'Vehículo no encontrado'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Verificar disponibilidad del vehículo
+        if vehiculo.estado != 'disponible':
+            return Response(
+                {'error': f'Vehículo no disponible. Estado actual: {vehiculo.estado}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Asignar vehículo
+        servicio.vehiculo = vehiculo
+        servicio.save(update_fields=['vehiculo'])
+
+        # Cambiar estado del vehículo a EN_SERVICIO
+        # NOTA: En producción, esto debería controlarse por fecha
+        # vehiculo.estado = 'en_servicio'
+        # vehiculo.save(update_fields=['estado'])
+
+        return Response(self.get_serializer(servicio).data)
 
     @action(detail=True, methods=['post'])
     def asignar_equipo(self, request, pk=None):
@@ -104,6 +194,146 @@ class ServicioMudanzaViewSet(viewsets.ModelViewSet):
         return Response(AsignacionPersonalSerializer(asig).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
+    def asignar_equipo_completo(self, request, pk=None):
+        """
+        Asigna múltiple personal al servicio de una sola vez (Fase 5 del flujo)
+        Body: {
+            conductor_id: int,
+            cargadores_ids: [int, int, ...]
+        }
+        """
+        from apps.personal.models import Personal
+        servicio = self.get_object()
+        conductor_id = request.data.get('conductor_id')
+        cargadores_ids = request.data.get('cargadores_ids', [])
+
+        if not conductor_id:
+            return Response(
+                {'error': 'conductor_id es requerido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Asignar conductor
+            conductor = Personal.objects.get(pk=conductor_id, tipo_personal='conductor')
+            AsignacionPersonal.objects.get_or_create(
+                servicio=servicio,
+                personal=conductor,
+                defaults={'rol_asignado': 'conductor'}
+            )
+
+            # Asignar cargadores
+            for idx, cargador_id in enumerate(cargadores_ids):
+                cargador = Personal.objects.get(pk=cargador_id, tipo_personal='cargador')
+                rol = 'cargador_principal' if idx == 0 else 'cargador_apoyo'
+                AsignacionPersonal.objects.get_or_create(
+                    servicio=servicio,
+                    personal=cargador,
+                    defaults={'rol_asignado': rol}
+                )
+
+            # Actualizar estado del servicio a ASIGNADO si tiene vehículo
+            if servicio.vehiculo:
+                servicio.estado = 'asignado'
+                servicio.save(update_fields=['estado'])
+
+            # Notificar a todo el equipo
+            NotificacionService.notificar_servicio_asignado(conductor, servicio)
+            for cargador_id in cargadores_ids:
+                cargador = Personal.objects.get(pk=cargador_id)
+                NotificacionService.notificar_servicio_asignado(cargador, servicio)
+
+            return Response(self.get_serializer(servicio).data)
+
+        except Personal.DoesNotExist:
+            return Response(
+                {'error': 'Personal no encontrado'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    @action(detail=True, methods=['post'])
+    def generar_plan_carga(self, request, pk=None):
+        """
+        Genera el plan de carga con heurística de empaquetado (Fase 5 del flujo)
+        Ordena los objetos según riesgo, peso y posición óptima
+        """
+        from apps.carga.serializers import PlanCargaSerializer
+        servicio = self.get_object()
+
+        # Verificar que el servicio tenga vehículo asignado
+        if not servicio.vehiculo:
+            return Response(
+                {'error': 'El servicio debe tener un vehículo asignado antes de generar el plan de carga'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Verificar que no exista ya un plan de carga
+        if servicio.planes_carga.exists():
+            return Response(
+                {'error': 'Ya existe un plan de carga para este servicio'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            plan = PlanCargaService.generar_plan_carga(servicio)
+            return Response(PlanCargaSerializer(plan).data, status=status.HTTP_201_CREATED)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['get'])
+    def mis_servicios(self, request):
+        """Obtiene los servicios asignados al conductor/cargador logueado (Fase 6)"""
+        usuario = request.user
+        try:
+            personal = Personal.objects.get(usuario=usuario)
+
+            # Obtener servicios donde este personal está asignado
+            from django.utils import timezone
+            from datetime import timedelta
+
+            # Servicios de hoy y próximos 7 días
+            hoy = timezone.now().date()
+            fecha_limite = hoy + timedelta(days=7)
+
+            servicios = ServicioMudanza.objects.filter(
+                equipo__personal=personal,
+                reserva__fecha_servicio__gte=hoy,
+                reserva__fecha_servicio__lte=fecha_limite
+            ).exclude(
+                estado__in=['cancelado', 'completado']
+            ).select_related(
+                'reserva',
+                'reserva__cotizacion',
+                'reserva__cotizacion__zona_origen',
+                'reserva__cotizacion__zona_destino',
+                'reserva__cliente__usuario',
+                'vehiculo',
+                'vehiculo__tipo_contenedor',
+            ).prefetch_related(
+                'equipo__personal__usuario',
+                Prefetch(
+                    'historial_estados',
+                    queryset=HistorialEstadoServicio.objects.select_related('cambiado_por').order_by(
+                        'creado_en'
+                    ),
+                ),
+                Prefetch(
+                    'reserva__cotizacion__objetos',
+                    queryset=ObjetoMudanza.objects.prefetch_related(
+                        Prefetch('fotos', queryset=FotoObjeto.objects.order_by('id'))
+                    ),
+                ),
+            ).order_by('reserva__fecha_servicio')
+
+            serializer = ServicioMudanzaSerializer(
+                servicios, many=True, context={'request': request}
+            )
+            return Response(serializer.data)
+
+        except Personal.DoesNotExist:
+            return Response({'error': 'Usuario no es personal'}, status=status.HTTP_403_FORBIDDEN)
+
+    @action(detail=True, methods=['post'])
     def cambiar_estado(self, request, pk=None):
         """Cambia el estado del servicio y notifica al cliente (Fase 6 del flujo)"""
         servicio = self.get_object()
@@ -121,7 +351,7 @@ class ServicioMudanzaViewSet(viewsets.ModelViewSet):
                 RandomForestService.actualizar_retroalimentacion(
                     'tiempo', servicio.id, servicio.duracion_minutos
                 )
-        elif estado_nuevo in ('en_origen', 'cargando') and not servicio.inicio_real:
+        elif estado_nuevo in ('en_camino', 'en_origen', 'cargando') and not servicio.inicio_real:
             servicio.inicio_real = timezone.now()
         servicio.save()
 
@@ -142,7 +372,73 @@ class ServicioMudanzaViewSet(viewsets.ModelViewSet):
             estado_nuevo
         )
 
-        return Response(ServicioMudanzaSerializer(servicio).data)
+        servicio = self.get_queryset().get(pk=servicio.pk)
+        return Response(self.get_serializer(servicio).data)
+
+    @action(detail=True, methods=['post'])
+    def marcar_item_carga(self, request, pk=None):
+        """Marca un item del plan de carga como cargado/descargado (Fase 6)"""
+        from apps.carga.models import ItemPlanCarga
+        from apps.carga.serializers import ItemPlanCargaSerializer
+
+        servicio = self.get_object()
+        item_id = request.data.get('item_id')
+        tipo = request.data.get('tipo')  # 'cargado' o 'descargado'
+
+        if not item_id or not tipo:
+            return Response(
+                {'error': 'item_id y tipo son requeridos'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if tipo not in ['cargado', 'descargado']:
+            return Response(
+                {'error': 'tipo debe ser "cargado" o "descargado"'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            item = ItemPlanCarga.objects.get(
+                id=item_id,
+                plan_carga__servicio=servicio
+            )
+
+            if tipo == 'cargado':
+                item.fue_cargado = True
+            else:
+                item.fue_descargado = True
+
+            item.save()
+
+            return Response(ItemPlanCargaSerializer(item).data)
+
+        except ItemPlanCarga.DoesNotExist:
+            return Response(
+                {'error': 'Item no encontrado'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    @action(detail=True, methods=['get'])
+    def plan_carga_detalle(self, request, pk=None):
+        """Obtiene el plan de carga con items para checklist (Fase 6)"""
+        from apps.carga.models import PlanCarga
+        from apps.carga.serializers import PlanCargaSerializer
+
+        servicio = self.get_object()
+
+        try:
+            plan = PlanCarga.objects.prefetch_related(
+                'items__objeto'
+            ).get(servicio=servicio)
+
+            serializer = PlanCargaSerializer(plan)
+            return Response(serializer.data)
+
+        except PlanCarga.DoesNotExist:
+            return Response(
+                {'error': 'No hay plan de carga para este servicio'},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
     @action(detail=True, methods=['post'])
     def reportar_incidencia(self, request, pk=None):
@@ -153,7 +449,11 @@ class ServicioMudanzaViewSet(viewsets.ModelViewSet):
         puede_staff = TieneAlgunoDe('inventario.incidencias_postentrega', 'inventario.editar').has_permission(
             request, self
         )
-        if not (dueno or puede_staff):
+        es_personal_equipo = AsignacionPersonal.objects.filter(
+            servicio=servicio,
+            personal__usuario=request.user,
+        ).exists()
+        if not (dueno or puede_staff or es_personal_equipo):
             raise PermissionDenied()
         serializer = IncidenciaSerializer(
             data=request.data,
@@ -173,7 +473,11 @@ class ServicioMudanzaViewSet(viewsets.ModelViewSet):
             return Response(IncidenciaSerializer(inc).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
+    @action(
+        detail=True,
+        methods=['post'],
+        parser_classes=[MultiPartParser, FormParser, JSONParser],
+    )
     def confirmar_entrega(self, request, pk=None):
         """Confirmación de entrega con firmas separadas (conductor + cliente) - Fases 6 y 7 del flujo"""
         servicio = self.get_object()
@@ -181,8 +485,12 @@ class ServicioMudanzaViewSet(viewsets.ModelViewSet):
         dueno = es_cliente_portal(request.user) and reserva.cliente.usuario_id == request.user.id
         staff = request.user.is_staff or request.user.is_superuser
         perm = TienePermiso('inventario.confirmar_entrega').has_permission(request, self)
+        es_personal_equipo = AsignacionPersonal.objects.filter(
+            servicio=servicio,
+            personal__usuario=request.user,
+        ).exists()
 
-        if not (dueno or staff or perm):
+        if not (dueno or staff or perm or es_personal_equipo):
             raise PermissionDenied()
 
         # Determinar qué firma se está recibiendo
@@ -199,8 +507,16 @@ class ServicioMudanzaViewSet(viewsets.ModelViewSet):
         if conforme in ['total', 'parcial', 'ninguna']:
             conf.cliente_conforme = conforme
 
-        # Guardar firma según tipo
+        # Guardar firma según tipo (multipart o JSON base64 desde app móvil)
         firma = request.FILES.get('firma')
+        if not firma:
+            b64 = request.data.get('firma_base64')
+            if b64:
+                raw = b64.split(',')[-1] if isinstance(b64, str) and ',' in b64 else b64
+                try:
+                    firma = ContentFile(base64.b64decode(raw), name='firma_conductor.png')
+                except (TypeError, ValueError, binascii.Error):
+                    firma = None
         if firma:
             if tipo_firma == 'conductor':
                 conf.firma_conductor = firma
@@ -253,13 +569,82 @@ class ServicioMudanzaViewSet(viewsets.ModelViewSet):
             cliente.monto_total_gastado += reserva.cotizacion.precio_total_calculado
         cliente.save(update_fields=['cantidad_mudanzas', 'monto_total_gastado'])
 
-        return Response(ServicioMudanzaSerializer(servicio).data)
+        return Response(self.get_serializer(servicio).data)
+
+
+    @action(detail=False, methods=['get'])
+    def mis_servicios_cliente(self, request):
+        """Obtiene los servicios del cliente logueado (Fase 7)"""
+        usuario = request.user
+        try:
+            from apps.clientes.models import Cliente
+            cliente = Cliente.objects.get(usuario=usuario)
+
+            # Obtener servicios del cliente
+            servicios = ServicioMudanza.objects.filter(
+                reserva__cliente=cliente
+            ).select_related(
+                'reserva',
+                'reserva__cotizacion',
+                'reserva__cotizacion__zona_origen',
+                'reserva__cotizacion__zona_destino',
+                'reserva__cliente__usuario',
+                'vehiculo',
+                'vehiculo__tipo_contenedor',
+            ).prefetch_related(
+                'equipo__personal__usuario',
+                Prefetch(
+                    'historial_estados',
+                    queryset=HistorialEstadoServicio.objects.select_related('cambiado_por').order_by(
+                        'creado_en'
+                    ),
+                ),
+                Prefetch(
+                    'reserva__cotizacion__objetos',
+                    queryset=ObjetoMudanza.objects.prefetch_related(
+                        Prefetch('fotos', queryset=FotoObjeto.objects.order_by('id'))
+                    ),
+                ),
+            ).order_by('-creado_en')
+
+            serializer = ServicioMudanzaSerializer(servicios, many=True, context={'request': request})
+            return Response(serializer.data)
+
+        except Cliente.DoesNotExist:
+            return Response({'error': 'Usuario no es cliente'}, status=status.HTTP_403_FORBIDDEN)
 
 
 class IncidenciaViewSet(viewsets.ModelViewSet):
     queryset = Incidencia.objects.select_related('servicio', 'servicio__reserva__cliente__usuario', 'objeto', 'reportado_por').all().order_by('-creado_en')
     serializer_class = IncidenciaSerializer
     filterset_fields = ('servicio', 'tipo', 'estado')
+
+    @action(detail=True, methods=['post'])
+    def resolver(self, request, pk=None):
+        """Resuelve una incidencia (Fase 8 del flujo)"""
+        incidencia = self.get_object()
+        resolucion = request.data.get('resolucion')
+
+        if not resolucion:
+            return Response({'error': 'resolucion es requerida'}, status=status.HTTP_400_BAD_REQUEST)
+
+        incidencia.estado = 'resuelta'
+        incidencia.resolucion = resolucion
+        incidencia.resuelta_en = timezone.now()
+        incidencia.save()
+
+        # Notificar al cliente que la incidencia fue resuelta
+        if incidencia.servicio.reserva.cliente:
+            from apps.notificaciones.services import NotificacionService
+            NotificacionService.enviar_notificacion(
+                usuario=incidencia.servicio.reserva.cliente.usuario,
+                tipo='incidencia_resuelta',
+                titulo='Incidencia Resuelta',
+                mensaje=f'La incidencia en el servicio {incidencia.servicio.reserva.codigo_confirmacion} ha sido resuelta. Resolución: {resolucion}',
+                datos_extra={'incidencia_id': incidencia.id}
+            )
+
+        return Response(IncidenciaSerializer(incidencia).data)
 
     def get_queryset(self):
         qs = Incidencia.objects.select_related(

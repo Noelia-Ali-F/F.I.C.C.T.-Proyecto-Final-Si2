@@ -37,21 +37,32 @@ class NotificacionService:
         )
 
     @staticmethod
-    def notificar_reserva_confirmada(cliente, reserva):
-        """Notifica al cliente que su reserva fue confirmada"""
+    def notificar_reserva_confirmada(cliente, reserva, factura=None):
+        """Notifica al cliente que su reserva fue confirmada (Fase 4)."""
         cotizacion = reserva.cotizacion
+        fecha_txt = (
+            reserva.fecha_servicio.strftime('%d/%m/%Y')
+            if reserva.fecha_servicio
+            else 'por definir'
+        )
+        franja = reserva.franja_horaria or '—'
+        zo = cotizacion.zona_origen.nombre if cotizacion.zona_origen else '—'
+        zd = cotizacion.zona_destino.nombre if cotizacion.zona_destino else '—'
         mensaje = (
             f"Tu reserva {reserva.codigo_confirmacion} está CONFIRMADA. "
-            f"Fecha: {reserva.fecha_servicio.strftime('%A %d de %B')}, {reserva.franja_horaria}. "
-            f"Mudanza de {cotizacion.zona_origen.nombre} a {cotizacion.zona_destino.nombre}. "
-            f"Puedes descargar tu factura desde la app."
+            f"Fecha: {fecha_txt}, franja: {franja}. "
+            f"Mudanza de {zo} a {zd}. "
+            f"Puedes descargar la factura del depósito desde la app o el portal web."
         )
+        datos_extra = {'reserva_id': reserva.id}
+        if factura:
+            datos_extra['factura_id'] = factura.id
         return NotificacionService.enviar_notificacion(
             usuario=cliente.usuario,
             tipo='reserva_confirmada',
             titulo=f'Reserva {reserva.codigo_confirmacion} confirmada',
             mensaje=mensaje,
-            datos_extra={'reserva_id': reserva.id}
+            datos_extra=datos_extra,
         )
 
     @staticmethod
@@ -72,15 +83,37 @@ class NotificacionService:
 
     @staticmethod
     def notificar_servicio_asignado(personal, servicio):
-        """Notifica al conductor/cargador que tiene un nuevo servicio asignado"""
+        """Notifica al conductor/cargador que tiene un nuevo servicio asignado (Fase 5)"""
+        from apps.inventario.models import ObjetoMudanza
+
         cotizacion = servicio.reserva.cotizacion
+
+        # Contar objetos de alto riesgo
+        objetos_alto_riesgo = ObjetoMudanza.objects.filter(
+            cotizacion=cotizacion,
+            rf_nivel_riesgo='alto'
+        ).count()
+
+        # Obtener equipo asignado
+        equipo = servicio.equipo.select_related('personal__usuario').all()
+        nombres_equipo = [a.personal.usuario.nombre_completo for a in equipo if a.personal.id != personal.id]
+
         mensaje = (
             f"Nuevo servicio asignado. {servicio.reserva.fecha_servicio.strftime('%A %d de %B')}, "
             f"{servicio.reserva.franja_horaria}. "
             f"Origen: {cotizacion.direccion_origen}, {cotizacion.zona_origen.nombre}. "
             f"Destino: {cotizacion.direccion_destino}, {cotizacion.zona_destino.nombre}. "
-            f"{cotizacion.cantidad_objetos} objetos. Vehículo: {servicio.vehiculo.placa}."
+            f"{cotizacion.cantidad_objetos} objetos"
         )
+
+        if objetos_alto_riesgo > 0:
+            mensaje += f" ({objetos_alto_riesgo} alto riesgo)"
+
+        mensaje += f". Vehículo: {servicio.vehiculo.placa if servicio.vehiculo else 'Por asignar'}."
+
+        if nombres_equipo:
+            mensaje += f" Equipo: {', '.join(nombres_equipo)}."
+
         return NotificacionService.enviar_notificacion(
             usuario=personal.usuario,
             tipo='servicio_asignado',
@@ -123,4 +156,34 @@ class NotificacionService:
             titulo='Nueva incidencia reportada',
             mensaje=mensaje,
             datos_extra={'incidencia_id': incidencia.id}
+        )
+
+    @staticmethod
+    def notificar_pago_saldo_registrado(cliente, reserva, factura):
+        """Cliente: pago de saldo verificado y factura final (Fase 8)."""
+        mensaje = (
+            f"Pago de saldo registrado: Bs {factura.total}. "
+            f"Factura {factura.numero_factura} disponible para descarga."
+        )
+        return NotificacionService.enviar_notificacion(
+            usuario=cliente.usuario,
+            tipo='pago_saldo_completado',
+            titulo='Factura de saldo',
+            mensaje=mensaje,
+            datos_extra={'reserva_id': reserva.id, 'factura_id': factura.id},
+        )
+
+    @staticmethod
+    def notificar_pago_rechazado(cliente, pago):
+        """Cliente: comprobante rechazado por operador (Fase 4)."""
+        mensaje = (
+            f"Tu comprobante de pago (Bs {pago.monto}, reserva {pago.reserva.codigo_confirmacion}) "
+            f"fue rechazado. Sube un nuevo comprobante desde la app o el portal."
+        )
+        return NotificacionService.enviar_notificacion(
+            usuario=cliente.usuario,
+            tipo='pago_rechazado',
+            titulo='Pago no verificado',
+            mensaje=mensaje,
+            datos_extra={'pago_id': pago.id, 'reserva_id': pago.reserva_id},
         )
