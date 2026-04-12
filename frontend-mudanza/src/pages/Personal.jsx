@@ -6,6 +6,7 @@ import FormInput from '../components/FormInput'
 import FormSelect from '../components/FormSelect'
 import FormCheckbox from '../components/FormCheckbox'
 import { useAuth } from '../context/AuthContext'
+import { formatApiErrorData, toastApiError, toastSuccess } from '../utils/apiToast'
 
 export default function Personal() {
   const { isAdmin } = useAuth()
@@ -58,8 +59,15 @@ export default function Personal() {
     }
     api
       .patch(`/personal/${modal.p.id}/`, payload)
-      .then(() => { fetch(); closeModal() })
-      .catch((err) => setErrors(err.response?.data || {}))
+      .then(() => {
+        toastSuccess('Datos de personal actualizados')
+        fetch()
+        closeModal()
+      })
+      .catch((err) => {
+        setErrors(err.response?.data || {})
+        toastApiError(err)
+      })
       .finally(() => setSaving(false))
   }
 
@@ -84,14 +92,17 @@ export default function Personal() {
       {isAdmin() && (
         <Modal open={modal.open} onClose={closeModal} title={modal.p ? `Editar ${modal.p?.usuario_nombre}` : ''}>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {Object.keys(errors).length > 0 && (
+              <p className="text-red-400 text-sm whitespace-pre-wrap">{formatApiErrorData(errors)}</p>
+            )}
             <FormInput label="Nº Licencia" name="numero_licencia" value={form.numero_licencia} onChange={handleChange} />
             <FormInput label="Tipo licencia" name="tipo_licencia" value={form.tipo_licencia} onChange={handleChange} />
             <FormInput label="Fecha ingreso" name="fecha_ingreso" type="date" value={form.fecha_ingreso} onChange={handleChange} />
             <FormInput label="Salario mensual (Bs)" name="salario_mensual" type="number" step="0.01" value={form.salario_mensual} onChange={handleChange} />
             <FormCheckbox label="Disponible" name="esta_disponible" checked={form.esta_disponible} onChange={handleChange} />
             <div className="flex justify-end gap-2 pt-4">
-              <button type="button" onClick={closeModal} className="px-4 py-2 text-slate-400 hover:text-white">Cancelar</button>
-              <button type="submit" disabled={saving} className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400 disabled:opacity-50">{saving ? 'Guardando...' : 'Guardar'}</button>
+              <button type="button" onClick={closeModal} className="btn-ghost">Cancelar</button>
+              <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Guardando...' : 'Guardar'}</button>
             </div>
           </form>
         </Modal>

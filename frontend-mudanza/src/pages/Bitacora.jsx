@@ -85,7 +85,7 @@ export default function Bitacora() {
         <button
           type="button"
           onClick={aplicarFiltros}
-          className="px-4 py-2 bg-amber-500 text-slate-900 rounded-lg hover:bg-amber-400 text-sm font-medium"
+          className="btn-primary text-sm"
         >
           Aplicar
         </button>

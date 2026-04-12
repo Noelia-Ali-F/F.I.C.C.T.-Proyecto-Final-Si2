@@ -150,8 +150,24 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 # === PROJECT LOCAL ============================================
+**/.claude/
 backend-mudanza/.claude/
+backend-mudanza/.env
+backend-mudanza/.env.*
+backend-mudanza/db.sqlite3
+backend-mudanza/db.sqlite3-journal
+backend-mudanza/media/
+backend-mudanza/staticfiles/
+backend-mudanza/.mypy_cache/
+backend-mudanza/.ruff_cache/
 backend-mudanza/django-dev.out.log
 backend-mudanza/django-dev.err.log
+frontend-mudanza/.env
+frontend-mudanza/.env.*
+frontend-mudanza/node_modules/
+frontend-mudanza/dist/
+frontend-mudanza/dist-ssr/
+frontend-mudanza/coverage/
+frontend-mudanza/.vite/
 frontend-mudanza/vite-dev.out.log
 frontend-mudanza/vite-dev.err.log

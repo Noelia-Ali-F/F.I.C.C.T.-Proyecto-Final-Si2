@@ -106,8 +106,16 @@ class DashboardView(APIView):
         ).aggregate(total=Sum('monto'))['total'] or 0
         servicios_completados = ServicioMudanza.objects.filter(estado='completado').count()
 
+        if rol == 'operador':
+            vista = 'operador'
+        elif rol in ('admin', 'administrador'):
+            vista = 'admin'
+        else:
+            # Rol personalizado: el front filtra tarjetas según permisos del usuario
+            vista = 'segmentado'
+
         payload = {
-            'vista': 'operador' if rol == 'operador' else 'admin',
+            'vista': vista,
             'reservas_hoy': reservas_hoy,
             'cotizaciones_pendientes': cotizaciones_pendientes,
             'clientes_total': clientes_total,

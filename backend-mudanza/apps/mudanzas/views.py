@@ -76,7 +76,7 @@ class ServicioMudanzaViewSet(viewsets.ModelViewSet):
             ),
         ).order_by('-creado_en')
         u = self.request.user
-        if u.is_superuser or u.is_staff:
+        if u.is_superuser:
             return qs
         if es_cliente_portal(u):
             return qs.filter(reserva__cliente__usuario=u)
@@ -483,7 +483,7 @@ class ServicioMudanzaViewSet(viewsets.ModelViewSet):
         servicio = self.get_object()
         reserva = servicio.reserva
         dueno = es_cliente_portal(request.user) and reserva.cliente.usuario_id == request.user.id
-        staff = request.user.is_staff or request.user.is_superuser
+        staff = request.user.is_superuser
         perm = TienePermiso('inventario.confirmar_entrega').has_permission(request, self)
         es_personal_equipo = AsignacionPersonal.objects.filter(
             servicio=servicio,
@@ -651,7 +651,7 @@ class IncidenciaViewSet(viewsets.ModelViewSet):
             'servicio', 'servicio__reserva__cliente__usuario', 'objeto', 'reportado_por'
         ).order_by('-creado_en')
         u = self.request.user
-        if u.is_superuser or u.is_staff:
+        if u.is_superuser:
             return qs
         if es_cliente_portal(u):
             return qs.filter(servicio__reserva__cliente__usuario=u)

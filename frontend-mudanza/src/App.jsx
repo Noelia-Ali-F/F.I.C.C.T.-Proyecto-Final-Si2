@@ -1,10 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import MainLayout from './layouts/MainLayout'
 
-import Login from './pages/Login'
-import Registro from './pages/Registro'
+import Login from './pages/auth/Login'
+import Registro from './pages/auth/Registro'
 import Dashboard from './pages/Dashboard'
 import Perfil from './pages/Perfil'
 import Clientes from './pages/Clientes'
@@ -36,7 +37,7 @@ function AppRoutes() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950">
-        <div className="animate-spin w-10 h-10 border-2 border-amber-500 border-t-transparent rounded-full" />
+        <div className="animate-spin w-10 h-10 border-2 border-primary-500 border-t-transparent rounded-full" />
       </div>
     )
   }
@@ -84,10 +85,27 @@ function AppRoutes() {
   )
 }
 
+const toastOptions = {
+  duration: 4500,
+  style: {
+    background: 'rgb(15 23 42 / 0.96)',
+    color: '#f8fafc',
+    border: '1px solid rgb(51 65 85 / 0.9)',
+    maxWidth: '28rem',
+  },
+  success: {
+    iconTheme: { primary: '#0ea5e9', secondary: '#0f172a' },
+  },
+  error: {
+    iconTheme: { primary: '#f87171', secondary: '#0f172a' },
+  },
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <Toaster position="top-right" toastOptions={toastOptions} />
         <AppRoutes />
       </AuthProvider>
     </BrowserRouter>

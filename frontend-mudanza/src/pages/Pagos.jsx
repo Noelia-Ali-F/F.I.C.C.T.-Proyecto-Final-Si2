@@ -7,6 +7,7 @@ import FormSelect from '../components/FormSelect'
 import VerificarPago from '../components/VerificarPago'
 import { useAuth } from '../context/AuthContext'
 import { downloadFacturaPdf } from '../utils/downloadFacturaPdf'
+import { toastApiError, toastMessage, toastSuccess } from '../utils/apiToast'
 
 const estadoLabel = (e) =>
   ({ pendiente: 'Pendiente', completado: 'Completado', fallido: 'Rechazado' }[e] || e)
@@ -80,23 +81,28 @@ export default function Pagos() {
         referencia_transaccion: form.referencia_transaccion || '',
       })
       .then(() => {
+        toastSuccess('Pago registrado')
         fetch()
         setFormModal({ open: false })
       })
-      .catch((err) => setErrors(err.response?.data || {}))
+      .catch((err) => {
+        setErrors(err.response?.data || {})
+        toastApiError(err)
+      })
       .finally(() => setSaving(false))
   }
 
   const descargarFactura = async (pago) => {
     if (!pago.factura_id) {
-      alert('Aún no hay factura para este pago.')
+      toastMessage('Aún no hay factura para este pago.')
       return
     }
     setDlBusy(pago.id)
     try {
       await downloadFacturaPdf(pago.factura_id, `${pago.reserva_codigo || 'factura'}.pdf`)
+      toastSuccess('Descarga iniciada')
     } catch (e) {
-      alert(e.message || 'Error al descargar')
+      toastApiError(e, e.message || 'Error al descargar')
     } finally {
       setDlBusy(null)
     }
@@ -132,7 +138,7 @@ export default function Pagos() {
           <button
             type="button"
             onClick={openCreate}
-            className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400 shrink-0"
+            className="btn-primary shrink-0"
           >
             + Registrar pago
           </button>
@@ -143,18 +149,14 @@ export default function Pagos() {
         <button
           type="button"
           onClick={() => setFiltro('pendientes')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium ${
-            filtro === 'pendientes' ? 'bg-amber-500 text-slate-900' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-          }`}
+          className={`tab-pill text-sm font-medium ${filtro === 'pendientes' ? 'tab-pill-active' : 'tab-pill-idle'}`}
         >
           Pendientes de verificación ({pagos.filter((p) => p.estado === 'pendiente').length})
         </button>
         <button
           type="button"
           onClick={() => setFiltro('todos')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium ${
-            filtro === 'todos' ? 'bg-amber-500 text-slate-900' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-          }`}
+          className={`tab-pill text-sm font-medium ${filtro === 'todos' ? 'tab-pill-active' : 'tab-pill-idle'}`}
         >
           Todos
         </button>
@@ -199,7 +201,7 @@ export default function Pagos() {
                     href={modal.pago.comprobante_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-amber-400 text-sm hover:underline"
+                    className="text-primary-400 text-sm hover:underline"
                   >
                     Ver comprobante
                   </a>
@@ -209,7 +211,7 @@ export default function Pagos() {
                     type="button"
                     disabled={dlBusy === modal.pago.id}
                     onClick={() => descargarFactura(modal.pago)}
-                    className="block w-full py-2 rounded-lg bg-amber-500 text-slate-900 font-medium hover:bg-amber-400 disabled:opacity-50"
+                    className="btn-primary w-full block"
                   >
                     Descargar factura PDF
                   </button>
@@ -276,14 +278,14 @@ export default function Pagos() {
             <button
               type="button"
               onClick={() => setFormModal({ open: false })}
-              className="px-4 py-2 text-slate-400 hover:text-white"
+              className="btn-ghost"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400 disabled:opacity-50"
+              className="btn-primary"
             >
               {saving ? 'Guardando…' : 'Registrar'}
             </button>

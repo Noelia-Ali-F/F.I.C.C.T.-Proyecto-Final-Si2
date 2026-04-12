@@ -5,6 +5,8 @@ import Modal from '../components/Modal'
 import FormInput from '../components/FormInput'
 import FormTextarea from '../components/FormTextarea'
 import FormCheckbox from '../components/FormCheckbox'
+import { toastApiError, toastSuccess } from '../utils/apiToast'
+import { cn } from '../lib/cn'
 
 export default function Servicios() {
   const [tipos, setTipos] = useState([])
@@ -90,7 +92,17 @@ export default function Servicios() {
       es_activo: form.es_activo,
     }
     const req = isEditing ? api.patch(`/servicios/tipos/${modal.item.id}/`, payload) : api.post('/servicios/tipos/', payload)
-    req.then(() => { fetchTipos(); closeModal() }).catch((err) => setErrors(err.response?.data || {})).finally(() => setSaving(false))
+    req
+      .then(() => {
+        toastSuccess(isEditing ? 'Tipo de servicio actualizado' : 'Tipo de servicio creado')
+        fetchTipos()
+        closeModal()
+      })
+      .catch((err) => {
+        setErrors(err.response?.data || {})
+        toastApiError(err)
+      })
+      .finally(() => setSaving(false))
   }
 
   const handleSubmitAdicional = (e) => {
@@ -105,17 +117,39 @@ export default function Servicios() {
       es_activo: form.es_activo,
     }
     const req = isEditing ? api.patch(`/servicios/adicionales/${modal.item.id}/`, payload) : api.post('/servicios/adicionales/', payload)
-    req.then(() => { fetchAdicionales(); closeModal() }).catch((err) => setErrors(err.response?.data || {})).finally(() => setSaving(false))
+    req
+      .then(() => {
+        toastSuccess(isEditing ? 'Servicio adicional actualizado' : 'Servicio adicional creado')
+        fetchAdicionales()
+        closeModal()
+      })
+      .catch((err) => {
+        setErrors(err.response?.data || {})
+        toastApiError(err)
+      })
+      .finally(() => setSaving(false))
   }
 
   const handleDeleteTipo = (t) => {
     if (!window.confirm(`¿Eliminar tipo ${t.nombre}?`)) return
-    api.delete(`/servicios/tipos/${t.id}/`).then(() => fetchTipos()).catch((e) => alert(e.response?.data?.detail || 'Error'))
+    api
+      .delete(`/servicios/tipos/${t.id}/`)
+      .then(() => {
+        toastSuccess('Tipo eliminado')
+        fetchTipos()
+      })
+      .catch((e) => toastApiError(e, 'Error al eliminar'))
   }
 
   const handleDeleteAdicional = (a) => {
     if (!window.confirm(`¿Eliminar servicio ${a.nombre}?`)) return
-    api.delete(`/servicios/adicionales/${a.id}/`).then(() => fetchAdicionales()).catch((e) => alert(e.response?.data?.detail || 'Error'))
+    api
+      .delete(`/servicios/adicionales/${a.id}/`)
+      .then(() => {
+        toastSuccess('Servicio adicional eliminado')
+        fetchAdicionales()
+      })
+      .catch((e) => toastApiError(e, 'Error al eliminar'))
   }
 
   const tipoCols = [
@@ -133,10 +167,14 @@ export default function Servicios() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <div className="flex gap-2">
-          <button onClick={() => setTab('tipos')} className={`px-4 py-2 rounded-lg ${tab === 'tipos' ? 'bg-amber-500 text-slate-900' : 'bg-slate-800'}`}>Tipos de servicio</button>
-          <button onClick={() => setTab('adicionales')} className={`px-4 py-2 rounded-lg ${tab === 'adicionales' ? 'bg-amber-500 text-slate-900' : 'bg-slate-800'}`}>Servicios adicionales</button>
+          <button type="button" onClick={() => setTab('tipos')} className={cn('tab-pill text-sm', tab === 'tipos' ? 'tab-pill-active' : 'tab-pill-idle')}>
+            Tipos de servicio
+          </button>
+          <button type="button" onClick={() => setTab('adicionales')} className={cn('tab-pill text-sm', tab === 'adicionales' ? 'tab-pill-active' : 'tab-pill-idle')}>
+            Servicios adicionales
+          </button>
         </div>
-        <button onClick={tab === 'tipos' ? openCreateTipo : openCreateAdicional} className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400">+ Nuevo</button>
+        <button onClick={tab === 'tipos' ? openCreateTipo : openCreateAdicional} className="btn-primary">+ Nuevo</button>
       </div>
       <h1 className="text-2xl font-bold mb-6">Servicios</h1>
       {tab === 'tipos' ? (
@@ -157,8 +195,8 @@ export default function Servicios() {
             <FormCheckbox label="Activo" name="es_activo" checked={form.es_activo} onChange={handleChange} />
           </div>
           <div className="flex justify-end gap-2 pt-4">
-            <button type="button" onClick={closeModal} className="px-4 py-2 text-slate-400 hover:text-white">Cancelar</button>
-            <button type="submit" disabled={saving} className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400 disabled:opacity-50">{saving ? 'Guardando...' : isEditing ? 'Guardar' : 'Crear'}</button>
+            <button type="button" onClick={closeModal} className="btn-ghost">Cancelar</button>
+            <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Guardando...' : isEditing ? 'Guardar' : 'Crear'}</button>
           </div>
         </form>
       </Modal>
@@ -171,8 +209,8 @@ export default function Servicios() {
           <FormCheckbox label="Precio por objeto" name="es_por_objeto" checked={form.es_por_objeto} onChange={handleChange} />
           <FormCheckbox label="Activo" name="es_activo" checked={form.es_activo} onChange={handleChange} />
           <div className="flex justify-end gap-2 pt-4">
-            <button type="button" onClick={closeModal} className="px-4 py-2 text-slate-400 hover:text-white">Cancelar</button>
-            <button type="submit" disabled={saving} className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400 disabled:opacity-50">{saving ? 'Guardando...' : isEditing ? 'Guardar' : 'Crear'}</button>
+            <button type="button" onClick={closeModal} className="btn-ghost">Cancelar</button>
+            <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Guardando...' : isEditing ? 'Guardar' : 'Crear'}</button>
           </div>
         </form>
       </Modal>

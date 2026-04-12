@@ -5,6 +5,7 @@ import Modal from '../components/Modal'
 import FormInput from '../components/FormInput'
 import FormTextarea from '../components/FormTextarea'
 import FormCheckbox from '../components/FormCheckbox'
+import { toastApiError, toastSuccess } from '../utils/apiToast'
 
 /** Alineado con backend apps.usuarios.models.Permiso.MODULOS */
 const MODULO_OPTIONS = [
@@ -114,10 +115,11 @@ export default function Roles() {
       : api.post('/auth/roles/', payload)
     req
       .then(() => {
+        toastSuccess(isEditing ? 'Rol actualizado' : 'Rol creado')
         fetchRoles()
         closeModal()
       })
-      .catch(() => {})
+      .catch((err) => toastApiError(err, 'No se pudo guardar el rol'))
       .finally(() => setSaving(false))
   }
 
@@ -127,16 +129,22 @@ export default function Roles() {
     api
       .put(`/auth/roles/${permisosModal.rol.id}/permisos/`, { permiso_ids: selectedPermisos })
       .then(() => {
+        toastSuccess('Permisos del rol actualizados')
         closePermisosModal()
       })
+      .catch((err) => toastApiError(err, 'No se pudieron guardar los permisos'))
       .finally(() => setSaving(false))
   }
 
   const handleDelete = (r) => {
     if (!window.confirm(`¿Eliminar rol ${r.nombre}?`)) return
-    api.delete(`/auth/roles/${r.id}/`)
-      .then(() => fetchRoles())
-      .catch((err) => alert(err.response?.data?.detail || 'Error al eliminar'))
+    api
+      .delete(`/auth/roles/${r.id}/`)
+      .then(() => {
+        toastSuccess('Rol eliminado')
+        fetchRoles()
+      })
+      .catch((err) => toastApiError(err, 'Error al eliminar'))
   }
 
   const handleCatSubmit = (e) => {
@@ -148,18 +156,23 @@ export default function Roles() {
       : api.post('/auth/permisos/', payload)
     req
       .then(() => {
+        toastSuccess(catModal.permiso ? 'Permiso actualizado' : 'Permiso creado')
         fetchPermisos()
         closeCatModal()
       })
-      .catch((err) => alert(err.response?.data ? JSON.stringify(err.response.data) : 'Error'))
+      .catch((err) => toastApiError(err, 'Error al guardar permiso'))
       .finally(() => setSaving(false))
   }
 
   const handleCatDelete = (p) => {
     if (!window.confirm(`¿Eliminar permiso ${p.nombre}? Puede afectar asignaciones a roles.`)) return
-    api.delete(`/auth/permisos/${p.id}/`)
-      .then(() => fetchPermisos())
-      .catch((err) => alert(err.response?.data?.detail || 'Error al eliminar'))
+    api
+      .delete(`/auth/permisos/${p.id}/`)
+      .then(() => {
+        toastSuccess('Permiso eliminado')
+        fetchPermisos()
+      })
+      .catch((err) => toastApiError(err, 'Error al eliminar'))
   }
 
   const columns = [
@@ -202,7 +215,7 @@ export default function Roles() {
           <button
             type="button"
             onClick={openCreate}
-            className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400"
+            className="btn-primary"
           >
             + Nuevo rol
           </button>
@@ -259,13 +272,13 @@ export default function Roles() {
             onChange={handleChange}
           />
           <div className="flex justify-end gap-2 pt-4">
-            <button type="button" onClick={closeModal} className="px-4 py-2 text-slate-400 hover:text-white">
+            <button type="button" onClick={closeModal} className="btn-ghost">
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400 disabled:opacity-50"
+              className="btn-primary"
             >
               {saving ? 'Guardando...' : isEditing ? 'Guardar' : 'Crear'}
             </button>
@@ -308,7 +321,7 @@ export default function Roles() {
               <button
                 type="button"
                 onClick={closePermisosModal}
-                className="px-4 py-2 text-slate-400 hover:text-white"
+                className="btn-ghost"
               >
                 Cancelar
               </button>
@@ -316,7 +329,7 @@ export default function Roles() {
                 type="button"
                 onClick={handleSavePermisos}
                 disabled={saving}
-                className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400 disabled:opacity-50"
+                className="btn-primary"
               >
                 {saving ? 'Guardando...' : 'Guardar permisos'}
               </button>
@@ -359,13 +372,13 @@ export default function Roles() {
             onChange={(e) => setCatForm((c) => ({ ...c, descripcion: e.target.value }))}
           />
           <div className="flex justify-end gap-2 pt-4">
-            <button type="button" onClick={closeCatModal} className="px-4 py-2 text-slate-400 hover:text-white">
+            <button type="button" onClick={closeCatModal} className="btn-ghost">
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400 disabled:opacity-50"
+              className="btn-primary"
             >
               {saving ? 'Guardando...' : 'Guardar'}
             </button>

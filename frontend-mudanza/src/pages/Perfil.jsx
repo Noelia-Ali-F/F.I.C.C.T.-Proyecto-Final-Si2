@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import api from '../api/client'
+import { toastApiError, toastSuccess } from '../utils/apiToast'
 
 const defaultPrefs = {
   notificar_email: true,
@@ -46,10 +47,11 @@ export default function Perfil() {
         ...form,
         preferencias_comunicacion: prefs,
       })
+      toastSuccess('Perfil actualizado')
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     } catch (err) {
-      console.error(err)
+      toastApiError(err, 'No se pudo guardar el perfil')
     }
   }
 
@@ -123,7 +125,7 @@ export default function Perfil() {
             </label>
           </div>
 
-          <button type="submit" className="px-4 py-2 bg-amber-500 text-slate-900 rounded-lg font-medium">
+          <button type="submit" className="btn-primary">
             Guardar
           </button>
           {saved && <span className="ml-2 text-emerald-400">Guardado</span>}
@@ -143,7 +145,7 @@ export default function Perfil() {
               <li key={h.id} className="text-sm text-slate-300 border-b border-slate-800/80 pb-2 last:border-0">
                 <span className="text-slate-500">{new Date(h.creado_en).toLocaleString('es-BO')}</span>
                 {' · '}
-                <span className="text-amber-400/90">{h.accion}</span>
+                <span className="text-primary-400/90">{h.accion}</span>
                 {h.entidad_tipo ? ` · ${h.entidad_tipo}` : ''}
               </li>
             ))}

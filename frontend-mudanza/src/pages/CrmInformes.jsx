@@ -4,6 +4,7 @@ import DataTable from '../components/DataTable'
 import FormInput from '../components/FormInput'
 import FormTextarea from '../components/FormTextarea'
 import Modal from '../components/Modal'
+import { formatApiErrorData, toastApiError, toastSuccess } from '../utils/apiToast'
 
 function Bar({ label, value, max, color }) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0
@@ -54,7 +55,9 @@ export default function CrmInformes() {
     api
       .post('/clientes/crm/prediccion-lealtad/')
       .then(({ data }) => {
-        setRfMsg(`Actualizados: ${data.actualizados} (${data.metodo})`)
+        const msg = `Actualizados: ${data.actualizados} (${data.metodo})`
+        setRfMsg(msg)
+        toastSuccess(msg)
         loadMetricas()
       })
       .catch((e) => setRfMsg(e.response?.data?.detail || 'Error'))
@@ -71,15 +74,27 @@ export default function CrmInformes() {
     const req = segModal.s
       ? api.patch(`/clientes/segmentos/${segModal.s.id}/`, segForm)
       : api.post('/clientes/segmentos/', segForm)
-    req.then(() => {
-      loadSegmentos()
-      setSegModal({ open: false, s: null })
-    }).catch((e) => setErr(JSON.stringify(e.response?.data || {})))
+    req
+      .then(() => {
+        toastSuccess(segModal.s ? 'Segmento actualizado' : 'Segmento creado')
+        loadSegmentos()
+        setSegModal({ open: false, s: null })
+        setErr('')
+      })
+      .catch((e) => {
+        setErr(formatApiErrorData(e.response?.data) || 'Error al guardar')
+      })
   }
 
   const delSeg = (s) => {
     if (!window.confirm(`¿Eliminar segmento ${s.nombre}?`)) return
-    api.delete(`/clientes/segmentos/${s.id}/`).then(loadSegmentos).catch(() => {})
+    api
+      .delete(`/clientes/segmentos/${s.id}/`)
+      .then(() => {
+        toastSuccess('Segmento eliminado')
+        loadSegmentos()
+      })
+      .catch((e) => toastApiError(e, 'No se pudo eliminar'))
   }
 
   const predicho = metricas?.clientes_por_segmento_predicho || {}
@@ -144,7 +159,7 @@ export default function CrmInformes() {
             <div>
               <h3 className="text-slate-400 text-sm mb-3">Por tipo de cliente</h3>
               {Object.entries(tipos).map(([k, v]) => (
-                <Bar key={k} label={k} value={v} max={maxTipo} color="bg-amber-500" />
+                <Bar key={k} label={k} value={v} max={maxTipo} color="bg-primary-500" />
               ))}
             </div>
           </div>
@@ -177,7 +192,7 @@ export default function CrmInformes() {
           <FormTextarea label="Descripción" value={segForm.descripcion} onChange={(e) => setSegForm({ ...segForm, descripcion: e.target.value })} />
           <FormInput label="Color (#hex)" value={segForm.color} onChange={(e) => setSegForm({ ...segForm, color: e.target.value })} />
           <div className="flex justify-end gap-2 pt-2">
-            <button type="submit" className="px-4 py-2 bg-amber-500 text-slate-900 rounded-lg font-medium">Guardar</button>
+            <button type="submit" className="btn-primary">Guardar</button>
           </div>
         </form>
       </Modal>

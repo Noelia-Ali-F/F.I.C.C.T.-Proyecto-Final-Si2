@@ -80,7 +80,7 @@ export default function Reservas() {
               <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-sm text-yellow-400">
                 ⏳ Esperando pago del depósito. La reserva se confirmará cuando el operador verifique tu comprobante.
                 {esClientePortal && (
-                  <span className="block mt-2 text-amber-300">
+                  <span className="block mt-2 text-primary-300">
                     <Link to="/mis-pagos" className="underline font-medium">
                       Mis pagos
                     </Link>{' '}

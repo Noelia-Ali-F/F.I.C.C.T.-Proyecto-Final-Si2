@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import apiClient from '../api/client';
+import { toastApiError, toastSuccess } from '../utils/apiToast';
 
 const ConfirmacionEntrega = ({ servicioId, onConfirmado }) => {
   const [conformidad, setConformidad] = useState('total');
@@ -16,7 +17,7 @@ const ConfirmacionEntrega = ({ servicioId, onConfirmado }) => {
     e.preventDefault();
 
     if (sigCanvas.current?.isEmpty()) {
-      alert('Por favor firma antes de confirmar');
+      toastApiError({ message: 'Por favor firma antes de confirmar' }, 'Validación');
       return;
     }
 
@@ -38,10 +39,10 @@ const ConfirmacionEntrega = ({ servicioId, onConfirmado }) => {
       });
 
       onConfirmado?.();
-      alert('¡Entrega confirmada exitosamente!');
+      toastSuccess('¡Entrega confirmada exitosamente!');
     } catch (error) {
       console.error('Error al confirmar entrega:', error);
-      alert('Error al confirmar la entrega. Por favor intenta nuevamente.');
+      toastApiError(error, 'Error al confirmar la entrega. Por favor intenta nuevamente.');
     } finally {
       setLoading(false);
     }

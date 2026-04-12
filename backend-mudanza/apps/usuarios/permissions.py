@@ -10,13 +10,13 @@ def _rol_slug(user):
 
 
 class EsAdministrador(BasePermission):
-    """Rol administrador del sistema (W4, W5, W8): admin, administrador o staff/superuser."""
+    """Rol administrador del sistema (W4, W5, W8): admin, administrador o superuser."""
 
     def has_permission(self, request, view):
         u = request.user
         if not u.is_authenticated:
             return False
-        if u.is_superuser or u.is_staff:
+        if u.is_superuser:
             return True
         return _rol_slug(u) in ('admin', 'administrador')
 
@@ -28,13 +28,13 @@ class EsAdminOOperador(BasePermission):
         u = request.user
         if not u.is_authenticated:
             return False
-        if u.is_superuser or u.is_staff:
+        if u.is_superuser:
             return True
         return _rol_slug(u) in ('admin', 'administrador', 'operador')
 
 
 class TieneAlgunoDe(BasePermission):
-    """True si el rol tiene al menos uno de los permisos listados (staff/superuser siempre)."""
+    """True si el rol tiene al menos uno de los permisos listados (superuser siempre)."""
 
     def __init__(self, *permisos):
         self.permisos = frozenset(permisos)
@@ -43,7 +43,7 @@ class TieneAlgunoDe(BasePermission):
         u = request.user
         if not u.is_authenticated:
             return False
-        if u.is_superuser or u.is_staff:
+        if u.is_superuser:
             return True
         rol = getattr(u, 'rol', None)
         if not rol:
@@ -64,7 +64,7 @@ class TienePermiso(BasePermission):
         if not request.user or not request.user.is_authenticated:
             return False
         u = request.user
-        if u.is_superuser or u.is_staff:
+        if u.is_superuser:
             return True
         if not getattr(u, 'rol', None):
             return False
@@ -80,7 +80,7 @@ def requiere_permiso(nombre_permiso):
             u = request.user
             if not u.is_authenticated:
                 return False
-            if u.is_superuser or u.is_staff:
+            if u.is_superuser:
                 return True
             if not getattr(u, 'rol', None):
                 return False

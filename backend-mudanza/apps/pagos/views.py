@@ -21,7 +21,7 @@ from .services import PagoService
 def _es_cliente_portal(user):
     if not user.is_authenticated:
         return False
-    if user.is_superuser or user.is_staff:
+    if user.is_superuser:
         return False
     rol = getattr(user, 'rol', None)
     return bool(rol and (rol.nombre or '').lower() == 'cliente')

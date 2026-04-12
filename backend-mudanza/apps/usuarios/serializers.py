@@ -4,7 +4,9 @@ from .models import Usuario, Rol, Permiso, RolPermiso, ConfiguracionSistema, Bit
 
 
 def _permisos_nombres_usuario(user):
-    if getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
+    # Solo superusuario: bypass global. is_staff es para Django Admin / cuentas internas,
+    # no debe expandir el catálogo de permisos del rol en API ni JWT.
+    if getattr(user, 'is_superuser', False):
         return list(Permiso.objects.values_list('nombre', flat=True))
     rol = getattr(user, 'rol', None)
     if not rol:
@@ -40,6 +42,7 @@ class UsuarioTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['email'] = user.email
         token['nombre'] = user.nombre
         token['rol_nombre'] = user.rol.nombre if user.rol else None
+        token['is_superuser'] = user.is_superuser
         token['permisos'] = _permisos_nombres_usuario(user)
         return token
 
@@ -127,9 +130,9 @@ class UsuarioPerfilSerializer(serializers.ModelSerializer):
         model = Usuario
         fields = (
             'id', 'email', 'nombre', 'apellido', 'nombre_completo', 'telefono', 'avatar_url',
-            'preferencias_comunicacion', 'rol', 'rol_nombre', 'is_staff', 'permisos',
+            'preferencias_comunicacion', 'rol', 'rol_nombre', 'is_staff', 'is_superuser', 'permisos',
         )
-        read_only_fields = ('email', 'permisos')
+        read_only_fields = ('email', 'permisos', 'is_superuser')
 
     def get_permisos(self, obj):
         return _permisos_nombres_usuario(obj)

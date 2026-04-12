@@ -30,7 +30,7 @@ def _parse_solicita_embalaje_desde_request(data):
 def _es_cliente_portal(user):
     if not user.is_authenticated:
         return False
-    if user.is_superuser or user.is_staff:
+    if user.is_superuser:
         return False
     rol = getattr(user, 'rol', None)
     return bool(rol and rol.nombre.lower() == 'cliente')
@@ -47,7 +47,7 @@ class CotizacionViewSet(viewsets.ModelViewSet):
             'cliente__usuario', 'zona_origen', 'zona_destino', 'tipo_servicio'
         ).prefetch_related('objetos', 'servicios_adicionales_vinculados__servicio_adicional').order_by('-creado_en')
         u = self.request.user
-        if u.is_superuser or u.is_staff:
+        if u.is_superuser:
             return qs
         if _es_cliente_portal(u):
             from apps.clientes.models import Cliente

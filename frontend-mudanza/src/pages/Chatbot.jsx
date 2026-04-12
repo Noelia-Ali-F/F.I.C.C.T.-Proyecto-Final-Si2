@@ -81,7 +81,7 @@ export default function Chatbot() {
         {isAdmin() && (
           <button
             onClick={openCreate}
-            className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400"
+            className="btn-primary"
           >
             Nueva FAQ
           </button>
@@ -93,10 +93,8 @@ export default function Chatbot() {
           <button
             key={cat}
             onClick={() => setCategoriaFiltro(cat)}
-            className={`px-3 py-1 rounded-lg text-sm font-medium ${
-              categoriaFiltro === cat
-                ? 'bg-amber-500 text-slate-900'
-                : 'bg-slate-800 text-slate-400 hover:bg-slate-750'
+            className={`tab-pill px-3 py-1.5 text-xs font-medium sm:text-sm ${
+              categoriaFiltro === cat ? 'tab-pill-active' : 'tab-pill-idle'
             }`}
           >
             {cat.charAt(0).toUpperCase() + cat.slice(1)}
@@ -106,7 +104,7 @@ export default function Chatbot() {
 
       {loading ? (
         <div className="flex justify-center py-12">
-          <div className="animate-spin w-10 h-10 border-2 border-amber-500 border-t-transparent rounded-full" />
+          <div className="animate-spin w-10 h-10 border-2 border-primary-500 border-t-transparent rounded-full" />
         </div>
       ) : faqsFiltradas.length === 0 ? (
         <p className="text-slate-400">No hay FAQs disponibles</p>
@@ -120,29 +118,17 @@ export default function Chatbot() {
               <div className="flex justify-between items-start mb-2">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="px-2 py-1 bg-amber-500/20 text-amber-400 text-xs font-medium rounded">
-                      {faq.categoria}
-                    </span>
-                    {!faq.es_activa && (
-                      <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs font-medium rounded">
-                        Inactiva
-                      </span>
-                    )}
+                    <span className="badge-soft-primary">{faq.categoria}</span>
+                    {!faq.es_activa && <span className="badge-soft-danger">Inactiva</span>}
                   </div>
                   <p className="font-medium text-slate-200">{faq.pregunta}</p>
                 </div>
                 {isAdmin() && (
                   <div className="flex gap-2 ml-4">
-                    <button
-                      onClick={() => openEdit(faq)}
-                      className="text-blue-400 hover:text-blue-300 text-sm"
-                    >
+                    <button type="button" onClick={() => openEdit(faq)} className="btn-table-action py-1 text-xs">
                       Editar
                     </button>
-                    <button
-                      onClick={() => handleDelete(faq.id)}
-                      className="text-red-400 hover:text-red-300 text-sm"
-                    >
+                    <button type="button" onClick={() => handleDelete(faq.id)} className="btn-table-danger py-1 text-xs">
                       Eliminar
                     </button>
                   </div>
@@ -218,14 +204,14 @@ export default function Chatbot() {
               <button
                 type="button"
                 onClick={closeModal}
-                className="px-4 py-2 text-slate-400 hover:text-white"
+                className="btn-ghost"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400 disabled:opacity-50"
+                className="btn-primary"
               >
                 {saving ? 'Guardando...' : 'Guardar'}
               </button>

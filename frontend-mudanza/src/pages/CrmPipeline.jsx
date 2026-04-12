@@ -42,7 +42,7 @@ export default function CrmPipeline() {
   if (!data) {
     return (
       <div className="flex justify-center py-20">
-        <div className="animate-spin w-10 h-10 border-2 border-amber-500 border-t-transparent rounded-full" />
+        <div className="animate-spin w-10 h-10 border-2 border-primary-500 border-t-transparent rounded-full" />
       </div>
     )
   }
@@ -55,20 +55,20 @@ export default function CrmPipeline() {
       <h1 className="text-2xl font-bold mb-2">Pipeline de solicitudes</h1>
       <p className="text-slate-500 text-sm mb-6">
         Flujo tipo lead → confirmación → operación (W11). Usa{' '}
-        <Link to="/cotizaciones" className="text-amber-400 hover:underline">Cotizaciones</Link>
+        <Link to="/cotizaciones" className="text-primary-400 hover:underline">Cotizaciones</Link>
         {' '}y{' '}
-        <Link to="/reservas" className="text-amber-400 hover:underline">Reservas</Link>
+        <Link to="/reservas" className="text-primary-400 hover:underline">Reservas</Link>
         {' '}para mover estados.
       </p>
 
       <div className="grid md:grid-cols-2 gap-8">
         <section className="border border-slate-800 rounded-xl p-4">
-          <h2 className="text-lg font-semibold text-amber-400/90 mb-4">Cotizaciones</h2>
+          <h2 className="text-lg font-semibold text-primary-400/90 mb-4">Cotizaciones</h2>
           <ul className="space-y-2">
             {Object.entries(cot).map(([k, v]) => (
               <li key={k} className="flex justify-between text-slate-300 border-b border-slate-800/80 py-2">
                 <span>{labelsCot[k] || k}</span>
-                <span className="font-mono text-amber-200">{v}</span>
+                <span className="font-mono text-primary-200">{v}</span>
               </li>
             ))}
           </ul>

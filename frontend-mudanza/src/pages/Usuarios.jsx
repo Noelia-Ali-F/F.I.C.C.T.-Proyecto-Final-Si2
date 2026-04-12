@@ -5,6 +5,7 @@ import Modal from '../components/Modal'
 import FormInput from '../components/FormInput'
 import FormSelect from '../components/FormSelect'
 import FormCheckbox from '../components/FormCheckbox'
+import { toastApiError, toastMessage, toastSuccess } from '../utils/apiToast'
 
 export default function Usuarios() {
   const [usuarios, setUsuarios] = useState([])
@@ -96,6 +97,7 @@ export default function Usuarios() {
     if (!isEditing) {
       if (!form.password) {
         setErrors({ password: 'La contraseña es obligatoria' })
+        toastMessage('La contraseña es obligatoria')
         return
       }
       payload.password = form.password
@@ -121,20 +123,26 @@ export default function Usuarios() {
       : api.post('/auth/usuarios/', payload)
     req
       .then(() => {
+        toastSuccess(isEditing ? 'Usuario actualizado' : 'Usuario creado')
         fetchUsuarios()
         closeModal()
       })
       .catch((err) => {
         setErrors(err.response?.data || {})
+        toastApiError(err)
       })
       .finally(() => setSaving(false))
   }
 
   const handleDelete = (u) => {
     if (!window.confirm(`¿Eliminar usuario ${u.email}?`)) return
-    api.delete(`/auth/usuarios/${u.id}/`)
-      .then(() => fetchUsuarios())
-      .catch((err) => alert(err.response?.data?.detail || 'Error al eliminar'))
+    api
+      .delete(`/auth/usuarios/${u.id}/`)
+      .then(() => {
+        toastSuccess('Usuario eliminado')
+        fetchUsuarios()
+      })
+      .catch((err) => toastApiError(err, 'Error al eliminar'))
   }
 
   const columns = [
@@ -151,7 +159,7 @@ export default function Usuarios() {
         <h1 className="text-2xl font-bold">Usuarios</h1>
         <button
           onClick={openCreate}
-          className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400"
+          className="btn-primary"
         >
           + Nuevo usuario
         </button>
@@ -304,13 +312,13 @@ export default function Usuarios() {
             />
           )}
           <div className="flex justify-end gap-2 pt-4">
-            <button type="button" onClick={closeModal} className="px-4 py-2 text-slate-400 hover:text-white">
+            <button type="button" onClick={closeModal} className="btn-ghost">
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400 disabled:opacity-50"
+              className="btn-primary"
             >
               {saving ? 'Guardando...' : isEditing ? 'Guardar' : 'Crear'}
             </button>

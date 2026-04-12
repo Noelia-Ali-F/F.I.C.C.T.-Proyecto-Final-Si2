@@ -44,7 +44,7 @@ class ObjetoMudanzaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = ObjetoMudanza.objects.select_related('cotizacion__cliente__usuario', 'categoria').all()
         u = self.request.user
-        if u.is_superuser or u.is_staff:
+        if u.is_superuser:
             return qs
         if es_cliente_portal(u):
             return qs.filter(cotizacion__cliente__usuario=u)
@@ -86,7 +86,7 @@ class ObjetoMudanzaViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         obj = self.get_object()
-        if not objeto_accesible(request.user, obj) and not request.user.is_staff:
+        if not objeto_accesible(request.user, obj) and not request.user.is_superuser:
             return Response(status=status.HTTP_403_FORBIDDEN)
         return super().destroy(request, *args, **kwargs)
 
@@ -99,7 +99,7 @@ class FotoObjetoViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = FotoObjeto.objects.select_related('objeto__cotizacion__cliente__usuario').order_by('-creado_en')
         u = self.request.user
-        if u.is_superuser or u.is_staff:
+        if u.is_superuser:
             return qs
         if es_cliente_portal(u):
             return qs.filter(objeto__cotizacion__cliente__usuario=u)

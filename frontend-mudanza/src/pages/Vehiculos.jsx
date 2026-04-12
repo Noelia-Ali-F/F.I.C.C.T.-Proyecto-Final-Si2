@@ -5,6 +5,7 @@ import Modal from '../components/Modal'
 import FormInput from '../components/FormInput'
 import FormSelect from '../components/FormSelect'
 import { useAuth } from '../context/AuthContext'
+import { toastApiError, toastSuccess } from '../utils/apiToast'
 
 export default function Vehiculos() {
   const { isAdmin } = useAuth()
@@ -89,14 +90,27 @@ export default function Vehiculos() {
     }
     const req = isEditing ? api.patch(`/vehiculos/${modal.v.id}/`, payload) : api.post('/vehiculos/', payload)
     req
-      .then(() => { fetch(); closeModal() })
-      .catch((err) => setErrors(err.response?.data || {}))
+      .then(() => {
+        toastSuccess(isEditing ? 'Vehículo actualizado' : 'Vehículo registrado')
+        fetch()
+        closeModal()
+      })
+      .catch((err) => {
+        setErrors(err.response?.data || {})
+        toastApiError(err)
+      })
       .finally(() => setSaving(false))
   }
 
   const handleDelete = (v) => {
     if (!window.confirm(`¿Eliminar vehículo ${v.placa}?`)) return
-    api.delete(`/vehiculos/${v.id}/`).then(() => fetch()).catch((e) => alert(e.response?.data?.detail || 'Error'))
+    api
+      .delete(`/vehiculos/${v.id}/`)
+      .then(() => {
+        toastSuccess('Vehículo eliminado')
+        fetch()
+      })
+      .catch((e) => toastApiError(e, 'Error al eliminar'))
   }
 
   const columns = [
@@ -112,7 +126,7 @@ export default function Vehiculos() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Vehículos</h1>
         {isAdmin() && (
-          <button onClick={openCreate} className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400">
+          <button onClick={openCreate} className="btn-primary">
             + Nuevo vehículo
           </button>
         )}
@@ -162,8 +176,8 @@ export default function Vehiculos() {
             />
             <FormInput label="URL foto" name="foto_url" value={form.foto_url} onChange={handleChange} />
             <div className="flex justify-end gap-2 pt-4">
-              <button type="button" onClick={closeModal} className="px-4 py-2 text-slate-400 hover:text-white">Cancelar</button>
-              <button type="submit" disabled={saving} className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400 disabled:opacity-50">{saving ? 'Guardando...' : isEditing ? 'Guardar' : 'Crear'}</button>
+              <button type="button" onClick={closeModal} className="btn-ghost">Cancelar</button>
+              <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Guardando...' : isEditing ? 'Guardar' : 'Crear'}</button>
             </div>
           </form>
         </Modal>

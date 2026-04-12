@@ -66,7 +66,7 @@ class FotoObjetoSerializer(serializers.ModelSerializer):
 
     def validate_objeto(self, obj):
         request = self.context.get('request')
-        if request and not request.user.is_staff and not request.user.is_superuser:
+        if request and not request.user.is_superuser:
             if not objeto_accesible(request.user, obj):
                 raise serializers.ValidationError('No autorizado para este objeto.')
         return obj

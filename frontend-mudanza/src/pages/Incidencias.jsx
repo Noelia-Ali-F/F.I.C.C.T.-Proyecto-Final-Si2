@@ -5,6 +5,7 @@ import Modal from '../components/Modal'
 import FormSelect from '../components/FormSelect'
 import FormTextarea from '../components/FormTextarea'
 import { useAuth } from '../context/AuthContext'
+import { toastApiError, toastMessage, toastSuccess } from '../utils/apiToast'
 
 const TIPOS_INCIDENCIA = {
   dano_objeto: 'Daño a Objeto',
@@ -15,13 +16,13 @@ const TIPOS_INCIDENCIA = {
 }
 
 const GRAVEDADES = {
-  baja: { label: 'Baja', color: 'text-green-500', bg: 'bg-green-500/20' },
-  media: { label: 'Media', color: 'text-amber-500', bg: 'bg-amber-500/20' },
-  alta: { label: 'Alta', color: 'text-red-500', bg: 'bg-red-500/20' },
+  baja: { label: 'Baja', color: 'text-success-500', bg: 'bg-success-500/20' },
+  media: { label: 'Media', color: 'text-warning-500', bg: 'bg-warning-500/20' },
+  alta: { label: 'Alta', color: 'text-error-500', bg: 'bg-error-500/20' },
 }
 
 const ESTADOS = {
-  reportada: { label: 'Reportada', color: 'text-amber-500', bg: 'bg-amber-500/20' },
+  reportada: { label: 'Reportada', color: 'text-warning-500', bg: 'bg-warning-500/20' },
   en_revision: { label: 'En Revisión', color: 'text-blue-500', bg: 'bg-blue-500/20' },
   resuelta: { label: 'Resuelta', color: 'text-green-500', bg: 'bg-green-500/20' },
   rechazada: { label: 'Rechazada', color: 'text-red-500', bg: 'bg-red-500/20' },
@@ -68,16 +69,17 @@ export default function Incidencias() {
     api
       .patch(`/mudanzas/incidencias/${incidencia.id}/`, { estado: nuevoEstado })
       .then(() => {
+        toastSuccess('Estado actualizado')
         fetch()
         setAccionModal({ open: false, incidencia: null })
       })
-      .catch((err) => alert(err.response?.data?.error || 'Error al actualizar'))
+      .catch((err) => toastApiError(err, 'Error al actualizar'))
       .finally(() => setSaving(false))
   }
 
   const agregarResolucion = (incidencia) => {
     if (!resolucion.trim()) {
-      alert('Por favor ingrese una resolución')
+      toastMessage('Por favor ingrese una resolución')
       return
     }
     setSaving(true)
@@ -87,11 +89,12 @@ export default function Incidencias() {
         resolucion: resolucion,
       })
       .then(() => {
+        toastSuccess('Incidencia resuelta')
         fetch()
         setAccionModal({ open: false, incidencia: null })
         setResolucion('')
       })
-      .catch((err) => alert(err.response?.data?.error || 'Error al resolver'))
+      .catch((err) => toastApiError(err, 'Error al resolver'))
       .finally(() => setSaving(false))
   }
 
@@ -173,7 +176,7 @@ export default function Incidencias() {
         </div>
         <div className="bg-slate-800 rounded-lg p-4">
           <div className="text-slate-400 text-sm">Pendientes</div>
-          <div className="text-2xl font-bold text-amber-500">{estadisticas.pendientes}</div>
+          <div className="text-2xl font-bold text-primary-500">{estadisticas.pendientes}</div>
         </div>
         <div className="bg-slate-800 rounded-lg p-4">
           <div className="text-slate-400 text-sm">Alta Gravedad</div>
@@ -189,31 +192,19 @@ export default function Incidencias() {
       <div className="flex gap-2 mb-4">
         <button
           onClick={() => setFiltro('todas')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium ${
-            filtro === 'todas'
-              ? 'bg-amber-500 text-slate-900'
-              : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-          }`}
+          className={`tab-pill text-sm font-medium ${filtro === 'todas' ? 'tab-pill-active' : 'tab-pill-idle'}`}
         >
           Todas
         </button>
         <button
           onClick={() => setFiltro('pendientes')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium ${
-            filtro === 'pendientes'
-              ? 'bg-amber-500 text-slate-900'
-              : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-          }`}
+          className={`tab-pill text-sm font-medium ${filtro === 'pendientes' ? 'tab-pill-active' : 'tab-pill-idle'}`}
         >
           Pendientes
         </button>
         <button
           onClick={() => setFiltro('altas')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium ${
-            filtro === 'altas'
-              ? 'bg-amber-500 text-slate-900'
-              : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-          }`}
+          className={`tab-pill text-sm font-medium ${filtro === 'altas' ? 'tab-pill-active' : 'tab-pill-idle'}`}
         >
           Alta Gravedad
         </button>

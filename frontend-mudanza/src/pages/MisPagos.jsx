@@ -3,6 +3,7 @@ import api from '../api/client'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
 import { downloadFacturaPdf } from '../utils/downloadFacturaPdf'
+import { toastApiError, toastMessage, toastSuccess } from '../utils/apiToast'
 
 const estadoLabel = (e) =>
   ({ pendiente: 'Pendiente de verificación', completado: 'Completado', fallido: 'Rechazado' }[e] || e)
@@ -37,14 +38,15 @@ export default function MisPagos() {
 
   const descargar = async (pago) => {
     if (!pago.factura_id) {
-      alert('La factura PDF estará disponible cuando el operador verifique el pago.')
+      toastMessage('La factura PDF estará disponible cuando el operador verifique el pago.')
       return
     }
     setDlBusy(pago.id)
     try {
       await downloadFacturaPdf(pago.factura_id, `${pago.reserva_codigo || 'factura'}.pdf`)
+      toastSuccess('Descarga iniciada')
     } catch (e) {
-      alert(e.message || 'No se pudo descargar el PDF')
+      toastApiError(e, e.message || 'No se pudo descargar el PDF')
     } finally {
       setDlBusy(null)
     }
@@ -52,8 +54,8 @@ export default function MisPagos() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-2">Mis pagos</h1>
-      <p className="text-slate-400 text-sm mb-6 max-w-2xl">
+      <h1 className="page-title mb-2">Mis pagos</h1>
+      <p className="page-subtitle mb-6 max-w-2xl">
         Pagos registrados en tus reservas (depósito o saldo). Si un comprobante está pendiente, el operador lo
         revisará en el portal. Cuando esté verificado, podrás descargar la factura en PDF.
       </p>
@@ -66,7 +68,7 @@ export default function MisPagos() {
           {
             label: 'Factura PDF',
             onClick: (p) => descargar(p),
-            className: 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30',
+            variant: 'primary',
           },
         ]}
       />
@@ -91,7 +93,7 @@ export default function MisPagos() {
                 href={modal.pago.comprobante_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-amber-400 text-sm hover:underline"
+                className="text-primary-400 text-sm hover:underline"
               >
                 Ver comprobante subido
               </a>
@@ -100,7 +102,7 @@ export default function MisPagos() {
               type="button"
               disabled={dlBusy === modal.pago.id}
               onClick={() => descargar(modal.pago)}
-              className="mt-4 w-full py-2 rounded-lg bg-amber-500 text-slate-900 font-medium hover:bg-amber-400 disabled:opacity-50"
+              className="btn-primary mt-4 w-full"
             >
               {dlBusy === modal.pago.id ? 'Descargando…' : 'Descargar factura PDF'}
             </button>

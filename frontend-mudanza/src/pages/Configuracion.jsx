@@ -43,7 +43,7 @@ export default function Configuracion() {
       <h1 className="text-2xl font-bold mb-6">Configuración del sistema</h1>
       {loading ? (
         <div className="flex justify-center py-12">
-          <div className="animate-spin w-10 h-10 border-2 border-amber-500 border-t-transparent rounded-full" />
+          <div className="animate-spin w-10 h-10 border-2 border-primary-500 border-t-transparent rounded-full" />
         </div>
       ) : config.length === 0 ? (
         <p className="text-slate-400">No hay configuración disponible</p>
@@ -56,7 +56,7 @@ export default function Configuracion() {
               onClick={() => isAdmin() && openEdit(c)}
             >
               <div>
-                <span className="font-mono text-amber-400">{c.clave}</span>
+                <span className="font-mono text-primary-400">{c.clave}</span>
                 {c.descripcion && <p className="text-slate-500 text-sm mt-1">{c.descripcion}</p>}
               </div>
               <div className="flex items-center gap-2">
@@ -79,8 +79,8 @@ export default function Configuracion() {
                 onChange={(e) => setForm({ valor: e.target.value })}
               />
               <div className="flex justify-end gap-2 pt-4">
-                <button type="button" onClick={closeModal} className="px-4 py-2 text-slate-400 hover:text-white">Cancelar</button>
-                <button type="submit" disabled={saving} className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400 disabled:opacity-50">{saving ? 'Guardando...' : 'Guardar'}</button>
+                <button type="button" onClick={closeModal} className="btn-ghost">Cancelar</button>
+                <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Guardando...' : 'Guardar'}</button>
               </div>
             </form>
           )}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import api from '../api/client'
 import FormInput from './FormInput'
+import { toastApiError, toastSuccess } from '../utils/apiToast'
 
 function formatoRegistro(iso) {
   const d = new Date(iso)
@@ -27,13 +28,11 @@ export default function VerificarPago({ pago, onVerificado }) {
       await api.post(`/pagos/${pago.id}/verificar/`, {
         referencia_transaccion: referenciaBanco.trim() || undefined,
       })
-      alert('Pago verificado. Se generó la factura en PDF y se notificó al cliente.')
+      toastSuccess('Pago verificado. Se generó la factura en PDF y se notificó al cliente.')
       onVerificado?.()
     } catch (error) {
       console.error(error)
-      const d = error.response?.data
-      const msg = typeof d === 'object' && d?.error ? d.error : error.message
-      alert(msg || 'Error al verificar el pago')
+      toastApiError(error, 'Error al verificar el pago')
     } finally {
       setLoading(false)
     }
@@ -44,11 +43,11 @@ export default function VerificarPago({ pago, onVerificado }) {
     setLoading(true)
     try {
       await api.post(`/pagos/${pago.id}/rechazar/`)
-      alert('Pago rechazado. Se notificó al cliente.')
+      toastSuccess('Pago rechazado. Se notificó al cliente.')
       onVerificado?.()
     } catch (error) {
       console.error(error)
-      alert('Error al rechazar el pago')
+      toastApiError(error, 'Error al rechazar el pago')
     } finally {
       setLoading(false)
     }
@@ -59,7 +58,7 @@ export default function VerificarPago({ pago, onVerificado }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm rounded-lg border border-slate-700 bg-slate-900/50 p-4">
         <div>
           <span className="text-slate-500">Reserva</span>
-          <p className="font-medium text-amber-400">{pago.reserva_codigo}</p>
+          <p className="font-medium text-primary-400">{pago.reserva_codigo}</p>
         </div>
         <div>
           <span className="text-slate-500">Tipo</span>
@@ -97,7 +96,7 @@ export default function VerificarPago({ pago, onVerificado }) {
             href={imgSrc}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm text-amber-400 hover:underline mt-2 inline-block"
+            className="text-sm text-primary-400 hover:underline mt-2 inline-block"
           >
             Abrir imagen en nueva pestaña
           </a>

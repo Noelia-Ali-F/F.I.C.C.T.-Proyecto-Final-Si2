@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import apiClient from '../api/client';
+import { toastApiError, toastSuccess } from '../utils/apiToast';
 
 const RevisionCotizacion = ({ cotizacion, onEnviado }) => {
   const [precioFinal, setPrecioFinal] = useState(
@@ -17,11 +18,11 @@ const RevisionCotizacion = ({ cotizacion, onEnviado }) => {
         precio_final: parseFloat(precioFinal),
       });
 
-      alert('Cotización enviada al cliente exitosamente');
+      toastSuccess('Cotización enviada al cliente exitosamente');
       onEnviado?.();
     } catch (error) {
       console.error('Error al enviar cotización:', error);
-      alert('Error al enviar la cotización');
+      toastApiError(error, 'Error al enviar la cotización');
     } finally {
       setLoading(false);
     }

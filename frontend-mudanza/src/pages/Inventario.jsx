@@ -6,6 +6,8 @@ import FormInput from '../components/FormInput'
 import FormSelect from '../components/FormSelect'
 import FormTextarea from '../components/FormTextarea'
 import { useAuth } from '../context/AuthContext'
+import { toastApiError, toastSuccess } from '../utils/apiToast'
+import { cn } from '../lib/cn'
 
 const TIPOS_FOTO = [
   { id: 'antes_traslado', nombre: 'Antes del traslado (evidencia inicial)' },
@@ -135,10 +137,14 @@ export default function Inventario() {
       : api.post('/inventario/categorias/', payload)
     req
       .then(() => {
+        toastSuccess(isEditing ? 'Categoría actualizada' : 'Categoría creada')
         fetchCategorias()
         closeModal()
       })
-      .catch((err) => setErrors(err.response?.data || {}))
+      .catch((err) => {
+        setErrors(err.response?.data || {})
+        toastApiError(err)
+      })
       .finally(() => setSaving(false))
   }
 
@@ -163,20 +169,36 @@ export default function Inventario() {
       : api.post('/inventario/objetos/', payload)
     req
       .then(() => {
+        toastSuccess(isEditing ? 'Objeto actualizado' : 'Objeto registrado')
         fetchObjetos()
         closeModal()
       })
-      .catch((err) => setErrors(err.response?.data || {}))
+      .catch((err) => {
+        setErrors(err.response?.data || {})
+        toastApiError(err)
+      })
       .finally(() => setSaving(false))
   }
 
   const handleDeleteCategoria = (c) => {
     if (!window.confirm(`¿Eliminar categoría ${c.nombre}?`)) return
-    api.delete(`/inventario/categorias/${c.id}/`).then(() => fetchCategorias()).catch((e) => alert(e.response?.data?.detail || 'Error'))
+    api
+      .delete(`/inventario/categorias/${c.id}/`)
+      .then(() => {
+        toastSuccess('Categoría eliminada')
+        fetchCategorias()
+      })
+      .catch((e) => toastApiError(e, 'No se pudo eliminar'))
   }
   const handleDeleteObjeto = (o) => {
     if (!window.confirm(`¿Eliminar objeto ${o.nombre}?`)) return
-    api.delete(`/inventario/objetos/${o.id}/`).then(() => fetchObjetos()).catch((e) => alert(e.response?.data?.detail || 'Error'))
+    api
+      .delete(`/inventario/objetos/${o.id}/`)
+      .then(() => {
+        toastSuccess('Objeto eliminado')
+        fetchObjetos()
+      })
+      .catch((e) => toastApiError(e, 'No se pudo eliminar'))
   }
 
   const descargarActa = (cotizacionId) => {
@@ -189,8 +211,9 @@ export default function Inventario() {
         a.download = `acta_pretraslado_${cotizacionId}.pdf`
         a.click()
         URL.revokeObjectURL(url)
+        toastSuccess('Acta descargada')
       })
-      .catch(() => alert('No se pudo generar el acta'))
+      .catch((err) => toastApiError(err, 'No se pudo generar el acta'))
   }
 
   const subirFoto = (e) => {
@@ -206,9 +229,9 @@ export default function Inventario() {
       .then(() => {
         setFotoFile(null)
         setFotoForm({ objeto: '', tipo_foto: 'antes_traslado', descripcion: '' })
-        alert('Foto registrada')
+        toastSuccess('Foto registrada')
       })
-      .catch(() => alert('Error al subir foto'))
+      .catch((err) => toastApiError(err, 'Error al subir foto'))
   }
 
   const enviarConfirmacionEntrega = (e) => {
@@ -227,9 +250,9 @@ export default function Inventario() {
         setEntregaFirma(null)
         setEntregaFotos([])
         fetchServicios()
-        alert('Entrega confirmada')
+        toastSuccess('Entrega confirmada')
       })
-      .catch((err) => alert(err.response?.data?.detail || JSON.stringify(err.response?.data) || 'Error'))
+      .catch((err) => toastApiError(err, 'Error al confirmar entrega'))
   }
 
   const catCols = [
@@ -280,7 +303,7 @@ export default function Inventario() {
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className={`px-4 py-2 rounded-lg text-sm ${tab === t.id ? 'bg-amber-500 text-slate-900' : 'bg-slate-800'}`}
+            className={cn('tab-pill text-sm', tab === t.id ? 'tab-pill-active' : 'tab-pill-idle')}
           >
             {t.label}
           </button>
@@ -289,7 +312,7 @@ export default function Inventario() {
           <button
             type="button"
             onClick={openCreateObjeto}
-            className="ml-auto px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400 text-sm"
+            className="ml-auto btn-primary text-sm"
           >
             + Nuevo objeto
           </button>
@@ -298,7 +321,7 @@ export default function Inventario() {
           <button
             type="button"
             onClick={openCreateCategoria}
-            className="ml-auto px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400 text-sm"
+            className="ml-auto btn-primary text-sm"
           >
             + Nueva categoría
           </button>
@@ -348,7 +371,7 @@ export default function Inventario() {
               onChange={(e) => setFotoFile(e.target.files?.[0] || null)}
               className="text-sm text-slate-400"
             />
-            <button type="submit" className="px-4 py-2 bg-amber-500 text-slate-900 rounded-lg font-medium text-sm">
+            <button type="submit" className="btn-primary text-sm">
               Subir foto
             </button>
           </form>
@@ -414,10 +437,10 @@ export default function Inventario() {
           />
           <FormInput label="Icono" name="icono" value={form.icono} onChange={handleChange} />
           <div className="flex justify-end gap-2 pt-4">
-            <button type="button" onClick={closeModal} className="px-4 py-2 text-slate-400 hover:text-white">
+            <button type="button" onClick={closeModal} className="btn-ghost">
               Cancelar
             </button>
-            <button type="submit" disabled={saving} className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg">
+            <button type="submit" disabled={saving} className="btn-primary">
               {saving ? 'Guardando...' : 'Guardar'}
             </button>
           </div>
@@ -461,10 +484,10 @@ export default function Inventario() {
           </div>
           <p className="text-slate-500 text-xs">Tras guardar se recalculan categoría sugerida (W18) y riesgo RF (W23).</p>
           <div className="flex justify-end gap-2 pt-4">
-            <button type="button" onClick={closeModal} className="px-4 py-2 text-slate-400 hover:text-white">
+            <button type="button" onClick={closeModal} className="btn-ghost">
               Cancelar
             </button>
-            <button type="submit" disabled={saving} className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg">
+            <button type="submit" disabled={saving} className="btn-primary">
               {saving ? 'Guardando...' : 'Guardar'}
             </button>
           </div>

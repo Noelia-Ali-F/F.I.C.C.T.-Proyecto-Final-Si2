@@ -13,7 +13,7 @@ from .services import crear_reserva_desde_cotizacion
 def _es_cliente_portal(user):
     if not user.is_authenticated:
         return False
-    if user.is_superuser or user.is_staff:
+    if user.is_superuser:
         return False
     rol = getattr(user, 'rol', None)
     return bool(rol and rol.nombre.lower() == 'cliente')
@@ -26,7 +26,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = Reserva.objects.select_related('cliente__usuario', 'cotizacion').order_by('-fecha_servicio')
         u = self.request.user
-        if u.is_superuser or u.is_staff:
+        if u.is_superuser:
             return qs
         if _es_cliente_portal(u):
             return qs.filter(cliente__usuario=u)

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { AlertTriangle } from 'lucide-react'
 import api from '../api/client'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
@@ -7,17 +8,47 @@ import FormSelect from '../components/FormSelect'
 import FormInput from '../components/FormInput'
 import ServicioTimeline from '../components/ServicioTimeline'
 import { useAuth } from '../context/AuthContext'
+import { cn } from '../lib/cn'
+import { PAGE_SIZE, parsePagedResponse } from '../utils/paging'
 
+/** Badges de estado: alto contraste sobre fondo claro (tabla + modal). */
 const ESTADOS_LABELS = {
-  asignado: { label: 'Asignado', color: 'bg-gray-500' },
-  en_camino: { label: 'En Camino', color: 'bg-blue-500' },
-  en_origen: { label: 'En Origen', color: 'bg-cyan-500' },
-  cargando: { label: 'Cargando', color: 'bg-indigo-500' },
-  en_ruta: { label: 'En Ruta', color: 'bg-purple-500' },
-  en_destino: { label: 'En Destino', color: 'bg-green-500' },
-  descargando: { label: 'Descargando', color: 'bg-lime-500' },
-  completado: { label: 'Completado', color: 'bg-green-600' },
-  cancelado: { label: 'Cancelado', color: 'bg-red-500' },
+  asignado: {
+    label: 'Asignado',
+    badge: 'bg-slate-100 text-slate-800 ring-slate-300/90 shadow-sm',
+  },
+  en_camino: {
+    label: 'En camino',
+    badge: 'bg-sky-100 text-sky-950 ring-sky-400/70 shadow-sm',
+  },
+  en_origen: {
+    label: 'En origen',
+    badge: 'bg-blue-100 text-blue-950 ring-blue-400/65 shadow-sm',
+  },
+  cargando: {
+    label: 'Cargando',
+    badge: 'bg-indigo-100 text-indigo-950 ring-indigo-400/65 shadow-sm',
+  },
+  en_ruta: {
+    label: 'En ruta',
+    badge: 'bg-violet-100 text-violet-950 ring-violet-400/65 shadow-sm',
+  },
+  en_destino: {
+    label: 'En destino',
+    badge: 'bg-emerald-100 text-emerald-950 ring-emerald-400/70 shadow-sm',
+  },
+  descargando: {
+    label: 'Descargando',
+    badge: 'bg-teal-100 text-teal-950 ring-teal-400/65 shadow-sm',
+  },
+  completado: {
+    label: 'Completado',
+    badge: 'bg-green-100 text-green-950 ring-green-500/50 shadow-sm font-bold',
+  },
+  cancelado: {
+    label: 'Cancelado',
+    badge: 'bg-red-100 text-red-950 ring-red-400/70 shadow-sm',
+  },
 }
 
 export default function Mudanzas() {
@@ -34,13 +65,22 @@ export default function Mudanzas() {
   const [detalleServicio, setDetalleServicio] = useState(null)
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
+  const [page, setPage] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
 
-  const fetch = () => {
+  const fetchServicios = () => {
     setLoading(true)
     api
-      .get('/mudanzas/')
-      .then(({ data }) => setServicios(data.results ?? data ?? []))
-      .catch(() => setServicios([]))
+      .get('/mudanzas/', { params: { page } })
+      .then(({ data }) => {
+        const { results, count } = parsePagedResponse(data)
+        setServicios(results)
+        setTotalCount(count)
+      })
+      .catch(() => {
+        setServicios([])
+        setTotalCount(0)
+      })
       .finally(() => setLoading(false))
   }
 
@@ -67,7 +107,10 @@ export default function Mudanzas() {
   }
 
   useEffect(() => {
-    fetch()
+    fetchServicios()
+  }, [page])
+
+  useEffect(() => {
     if (isAdmin()) {
       api
         .get('/vehiculos/')
@@ -96,7 +139,7 @@ export default function Mudanzas() {
         notas_operador: form.notas_operador || '',
       })
       .then(() => {
-        fetch()
+        fetchServicios()
         setFormModal({ open: false })
       })
       .catch(() => {})
@@ -107,7 +150,7 @@ export default function Mudanzas() {
     api
       .post(`/mudanzas/${srv.id}/cambiar_estado/`, { estado_nuevo: estadoNuevo })
       .then(() => {
-        fetch()
+        fetchServicios()
         setEstadoModal({ open: false, srv: null })
         if (detalleServicio?.id === srv.id) {
           fetchDetalleServicio(srv.id)
@@ -122,7 +165,7 @@ export default function Mudanzas() {
         rol_asignado: rol,
       })
       .then(() => {
-        fetch()
+        fetchServicios()
         setEquipoModal({ open: false, srv: null })
         if (detalleServicio?.id === srv.id) {
           fetchDetalleServicio(srv.id)
@@ -158,44 +201,40 @@ export default function Mudanzas() {
         const est = ESTADOS_LABELS[srv.estado]
         return est ? (
           <span
-            className={`px-2 py-1 rounded text-xs font-medium text-white ${est.color}`}
+            className={cn(
+              'inline-flex min-h-[1.625rem] items-center rounded-lg px-2.5 py-1 text-xs font-semibold leading-tight ring-1 ring-inset',
+              est.badge
+            )}
           >
             {est.label}
           </span>
         ) : (
-          srv.estado
+          <span className="badge-soft-primary">{srv.estado}</span>
         )
       },
     },
   ]
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
+    <div className="animate-fade-in">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Panel Operador - Servicios de Mudanza</h1>
-          <p className="text-slate-400 text-sm mt-1">
-            Gestione el estado y equipo de los servicios en tiempo real
+          <h1 className="page-title">Servicios de mudanza</h1>
+          <p className="page-subtitle max-w-2xl">
+            Estado y equipo de cada servicio en tiempo real. Abre una fila para ver el detalle y la línea de tiempo.
           </p>
         </div>
-        {isAdmin() && (
-          <button
-            onClick={openCreate}
-            className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400"
-          >
-            + Nuevo servicio
-          </button>
-        )}
-      </div>
-
-      {/* Link a incidencias */}
-      <div className="mb-4">
-        <Link
-          to="/incidencias"
-          className="inline-flex items-center px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-medium"
-        >
-          ⚠️ Ver Incidencias
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link to="/incidencias" className="btn-secondary gap-2 text-sm">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-warning-500" aria-hidden />
+            Incidencias
+          </Link>
+          {isAdmin() && (
+            <button type="button" onClick={openCreate} className="btn-primary">
+              + Nuevo servicio
+            </button>
+          )}
+        </div>
       </div>
 
       <DataTable
@@ -217,6 +256,13 @@ export default function Mudanzas() {
               ]
             : []
         }
+        pagination={{
+          page,
+          pageSize: PAGE_SIZE,
+          totalCount,
+          loading,
+          onPageChange: setPage,
+        }}
       />
 
       {/* Modal de Detalle Mejorado */}
@@ -233,32 +279,40 @@ export default function Mudanzas() {
           <div className="space-y-6">
             {/* Estado y Timeline */}
             <div>
-              <h3 className="text-lg font-semibold mb-3">Estado del Servicio</h3>
-              <div className="flex items-center gap-3 mb-4">
-                <span
-                  className={`px-3 py-1 rounded font-medium text-white ${
-                    ESTADOS_LABELS[detalleServicio.estado]?.color || 'bg-gray-500'
-                  }`}
-                >
-                  {ESTADOS_LABELS[detalleServicio.estado]?.label ||
-                    detalleServicio.estado}
-                </span>
+              <h3 className="mb-3 text-base font-semibold text-slate-800">Estado del servicio</h3>
+              <div className="mb-4 flex flex-wrap items-center gap-3">
+                {ESTADOS_LABELS[detalleServicio.estado] ? (
+                  <span
+                    className={cn(
+                      'inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-semibold leading-tight ring-1 ring-inset',
+                      ESTADOS_LABELS[detalleServicio.estado].badge
+                    )}
+                  >
+                    {ESTADOS_LABELS[detalleServicio.estado].label}
+                  </span>
+                ) : (
+                  <span className="badge-soft-primary text-sm">{detalleServicio.estado}</span>
+                )}
                 {isAdmin() && (
                   <button
+                    type="button"
                     onClick={() =>
                       setEstadoModal({ open: true, srv: detalleServicio })
                     }
-                    className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-sm"
+                    className="btn-secondary btn-primary-sm"
                   >
-                    Cambiar Estado
+                    Cambiar estado
                   </button>
                 )}
               </div>
-              <ServicioTimeline estado={detalleServicio.estado} />
+              <ServicioTimeline
+                servicio={detalleServicio}
+                historialEstados={detalleServicio.historial_estados ?? detalleServicio.historialEstados}
+              />
             </div>
 
             {/* Información de Reserva */}
-            <div className="grid grid-cols-2 gap-4 bg-slate-800 p-4 rounded-lg">
+            <div className="panel-inset grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <p className="text-slate-400 text-sm">Fecha de Servicio</p>
                 <p className="font-medium">
@@ -287,8 +341,8 @@ export default function Mudanzas() {
 
             {/* Vehículo */}
             <div>
-              <h3 className="text-lg font-semibold mb-2">Vehículo Asignado</h3>
-              <div className="bg-slate-800 p-3 rounded-lg">
+              <h3 className="mb-2 text-base font-semibold text-slate-800">Vehículo asignado</h3>
+              <div className="panel-inset py-3">
                 {detalleServicio.vehiculo_placa ? (
                   <p className="font-medium">{detalleServicio.vehiculo_placa}</p>
                 ) : (
@@ -299,16 +353,17 @@ export default function Mudanzas() {
 
             {/* Equipo */}
             <div>
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="text-lg font-semibold">Equipo Asignado</h3>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-base font-semibold text-slate-800">Equipo asignado</h3>
                 {isAdmin() && (
                   <button
+                    type="button"
                     onClick={() =>
                       setEquipoModal({ open: true, srv: detalleServicio })
                     }
-                    className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-sm"
+                    className="btn-secondary btn-primary-sm"
                   >
-                    + Agregar Persona
+                    + Agregar persona
                   </button>
                 )}
               </div>
@@ -317,7 +372,7 @@ export default function Mudanzas() {
                   {detalleServicio.equipo.map((miembro, idx) => (
                     <div
                       key={idx}
-                      className="flex justify-between items-center bg-slate-800 p-3 rounded-lg"
+                      className="panel-inset flex items-center justify-between py-3"
                     >
                       <div>
                         <p className="font-medium">{miembro.personal_nombre}</p>
@@ -329,7 +384,7 @@ export default function Mudanzas() {
                   ))}
                 </div>
               ) : (
-                <p className="text-slate-400 bg-slate-800 p-3 rounded-lg">
+                <p className="panel-inset text-slate-400">
                   No hay equipo asignado
                 </p>
               )}
@@ -338,18 +393,19 @@ export default function Mudanzas() {
             {/* Incidencias */}
             {detalleServicio.incidencias && detalleServicio.incidencias.length > 0 && (
               <div>
-                <h3 className="text-lg font-semibold mb-2 text-red-400">
-                  ⚠️ Incidencias Reportadas
+                <h3 className="mb-2 flex items-center gap-2 text-base font-semibold text-error-300">
+                  <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+                  Incidencias reportadas
                 </h3>
                 <div className="space-y-2">
                   {detalleServicio.incidencias.map((inc, idx) => (
                     <div
                       key={idx}
-                      className="bg-red-500/10 border border-red-500/30 p-3 rounded-lg"
+                      className="rounded-2xl border border-error-500/30 bg-error-500/10 p-3"
                     >
                       <div className="flex justify-between items-start">
                         <div>
-                          <p className="font-medium text-red-400">
+                          <p className="font-medium text-error-300">
                             {inc.tipo} - {inc.gravedad}
                           </p>
                           <p className="text-sm text-slate-300 mt-1">
@@ -357,11 +413,9 @@ export default function Mudanzas() {
                           </p>
                         </div>
                         <span
-                          className={`px-2 py-1 rounded text-xs ${
-                            inc.estado === 'resuelta'
-                              ? 'bg-green-500/20 text-green-400'
-                              : 'bg-amber-500/20 text-amber-400'
-                          }`}
+                          className={
+                            inc.estado === 'resuelta' ? 'badge-soft-success' : 'badge-soft-primary'
+                          }
                         >
                           {inc.estado}
                         </span>
@@ -371,9 +425,9 @@ export default function Mudanzas() {
                 </div>
                 <Link
                   to="/incidencias"
-                  className="inline-block mt-3 text-amber-500 hover:text-amber-400 text-sm"
+                  className="btn-table-action mt-3 inline-flex"
                 >
-                  Ver todas las incidencias →
+                  Ver todas las incidencias
                 </Link>
               </div>
             )}
@@ -381,8 +435,8 @@ export default function Mudanzas() {
             {/* Notas del Operador */}
             {detalleServicio.notas_operador && (
               <div>
-                <h3 className="text-lg font-semibold mb-2">Notas del Operador</h3>
-                <div className="bg-slate-800 p-3 rounded-lg">
+                <h3 className="mb-2 text-base font-semibold text-slate-800">Notas del operador</h3>
+                <div className="panel-inset py-3">
                   <p className="text-slate-300">{detalleServicio.notas_operador}</p>
                 </div>
               </div>
@@ -390,7 +444,7 @@ export default function Mudanzas() {
           </div>
         ) : (
           <div className="text-center py-8">
-            <div className="animate-spin w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full mx-auto" />
+            <div className="animate-spin w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full mx-auto" />
             <p className="text-slate-400 mt-2">Cargando detalles...</p>
           </div>
         )}
@@ -432,14 +486,14 @@ export default function Mudanzas() {
             <button
               type="button"
               onClick={() => setFormModal({ open: false })}
-              className="px-4 py-2 text-slate-400 hover:text-white"
+              className="btn-ghost"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400 disabled:opacity-50"
+              className="btn-primary"
             >
               {saving ? 'Creando...' : 'Crear'}
             </button>
@@ -457,7 +511,7 @@ export default function Mudanzas() {
           <div>
             <p className="text-slate-400 mb-4">
               Estado actual:{' '}
-              <span className="text-white font-medium">
+              <span className="font-medium text-slate-900">
                 {ESTADOS_LABELS[estadoModal.srv.estado]?.label ||
                   estadoModal.srv.estado}
               </span>
@@ -467,10 +521,8 @@ export default function Mudanzas() {
                 <button
                   key={est}
                   onClick={() => cambiarEstado(estadoModal.srv, est)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium ${
-                    estadoModal.srv.estado === est
-                      ? 'bg-amber-500 text-slate-900'
-                      : 'bg-slate-700 hover:bg-slate-600 text-white'
+                  className={`tab-pill px-3 py-2 text-sm font-medium ${
+                    estadoModal.srv.estado === est ? 'tab-pill-active' : 'tab-pill-idle'
                   }`}
                 >
                   {ESTADOS_LABELS[est]?.label || est}
@@ -524,9 +576,10 @@ function EquipoForm({ personal, onAsignar }) {
         onChange={(e) => setSel((s) => ({ ...s, rol: e.target.value }))}
       />
       <button
+        type="button"
         onClick={() => sel.personal && onAsignar(parseInt(sel.personal), sel.rol)}
         disabled={!sel.personal}
-        className="px-4 py-2 bg-amber-500 text-slate-900 rounded-lg font-medium hover:bg-amber-400 disabled:opacity-50 w-full"
+        className="btn-primary w-full"
       >
         Asignar
       </button>

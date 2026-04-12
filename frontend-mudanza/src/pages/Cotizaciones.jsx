@@ -5,6 +5,8 @@ import Modal from '../components/Modal'
 import FormInput from '../components/FormInput'
 import FormSelect from '../components/FormSelect'
 import { useAuth } from '../context/AuthContext'
+import { toastApiError, toastMessage, toastSuccess } from '../utils/apiToast'
+import { PAGE_SIZE, parsePagedResponse } from '../utils/paging'
 
 export default function Cotizaciones() {
   const { hasRole, isAdmin } = useAuth()
@@ -19,17 +21,30 @@ export default function Cotizaciones() {
   const [form, setForm] = useState({})
   const [errors, setErrors] = useState({})
   const [saving, setSaving] = useState(false)
+  const [page, setPage] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
 
   const fetch = () => {
     setLoading(true)
-    api.get('/cotizaciones/')
-      .then(({ data }) => setCotizaciones(data.results ?? data ?? []))
-      .catch(() => setCotizaciones([]))
+    api
+      .get('/cotizaciones/', { params: { page } })
+      .then(({ data }) => {
+        const { results, count } = parsePagedResponse(data)
+        setCotizaciones(results)
+        setTotalCount(count)
+      })
+      .catch(() => {
+        setCotizaciones([])
+        setTotalCount(0)
+      })
       .finally(() => setLoading(false))
   }
 
   useEffect(() => {
     fetch()
+  }, [page])
+
+  useEffect(() => {
     if (!isCliente) {
       api.get('/clientes/').then(({ data }) => setClientes(data.results ?? data ?? [])).catch(() => {})
       api.get('/zonas/').then(({ data }) => setZonas(data.results ?? data ?? [])).catch(() => {})
@@ -95,42 +110,67 @@ export default function Cotizaciones() {
     req
       .then((res) => {
         const id = res.data?.id
+        toastSuccess(isEditing ? 'Cotización actualizada' : 'Cotización creada')
         fetch()
         setFormModal({ open: false, cot: null })
         if (!isEditing && id) api.post(`/cotizaciones/${id}/calcular-precio/`).catch(() => {})
       })
-      .catch((err) => setErrors(err.response?.data || {}))
+      .catch((err) => {
+        setErrors(err.response?.data || {})
+        toastApiError(err)
+      })
       .finally(() => setSaving(false))
   }
 
   const enviar = (id) => {
     // Según flujo Fase 3: operador envía cotización con precio final
-    api.post(`/cotizaciones/${id}/enviar/`).then(() => fetch())
+    api
+      .post(`/cotizaciones/${id}/enviar/`)
+      .then(() => {
+        toastSuccess('Cotización enviada al cliente')
+        fetch()
+      })
+      .catch((err) => toastApiError(err, 'Error al enviar la cotización'))
   }
 
   const aceptar = (id) => {
     // Según flujo Fase 3: solo el CLIENTE acepta (genera reserva automáticamente)
     if (!isCliente) {
-      alert('Solo el cliente puede aceptar la cotización')
+      toastMessage('Solo el cliente puede aceptar la cotización')
       return
     }
-    api.post(`/cotizaciones/${id}/aceptar/`).then(() => {
-      alert('Cotización aceptada. Se generó tu reserva automáticamente.')
-      fetch()
-    })
+    api
+      .post(`/cotizaciones/${id}/aceptar/`)
+      .then(() => {
+        toastSuccess('Cotización aceptada. Se generó tu reserva automáticamente.')
+        fetch()
+      })
+      .catch((err) => toastApiError(err, 'No se pudo aceptar la cotización'))
   }
 
   const rechazar = (id) => {
     // Cliente rechaza cotización
     if (!isCliente) {
-      alert('Solo el cliente puede rechazar la cotización')
+      toastMessage('Solo el cliente puede rechazar la cotización')
       return
     }
-    api.post(`/cotizaciones/${id}/rechazar/`).then(() => fetch())
+    api
+      .post(`/cotizaciones/${id}/rechazar/`)
+      .then(() => {
+        toastSuccess('Cotización rechazada')
+        fetch()
+      })
+      .catch((err) => toastApiError(err, 'No se pudo rechazar la cotización'))
   }
 
   const recalcular = (id) => {
-    api.post(`/cotizaciones/${id}/calcular-precio/`).then(() => fetch())
+    api
+      .post(`/cotizaciones/${id}/calcular-precio/`)
+      .then(() => {
+        toastSuccess('Precio recalculado')
+        fetch()
+      })
+      .catch((err) => toastApiError(err, 'Error al recalcular'))
   }
 
   const columns = [
@@ -144,11 +184,14 @@ export default function Cotizaciones() {
   const clientesOptions = isCliente ? [] : clientes
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Cotizaciones</h1>
+    <div className="animate-fade-in">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="page-title">Cotizaciones</h1>
+          <p className="page-subtitle max-w-2xl">Seguimiento de propuestas y estados hasta la reserva.</p>
+        </div>
         {!isCliente && (
-          <button onClick={openCreate} className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400">
+          <button type="button" onClick={openCreate} className="btn-primary shrink-0">
             + Nueva cotización
           </button>
         )}
@@ -159,6 +202,13 @@ export default function Cotizaciones() {
         loading={loading}
         onRowClick={(c) => setModal({ open: true, cot: c })}
         onEdit={!isCliente ? openEdit : undefined}
+        pagination={{
+          page,
+          pageSize: PAGE_SIZE,
+          totalCount,
+          loading,
+          onPageChange: setPage,
+        }}
       />
       <Modal open={modal.open} onClose={() => setModal({ open: false, cot: null })} title={modal.cot ? `Cotización #${modal.cot.id}` : ''} size="lg">
         {modal.cot && (
@@ -171,27 +221,27 @@ export default function Cotizaciones() {
             <div className="flex flex-wrap gap-2 pt-4">
               {modal.cot.estado === 'borrador' && !isCliente && (
                 <>
-                  <button onClick={() => recalcular(modal.cot.id)} className="px-3 py-1 text-sm bg-slate-600 hover:bg-slate-500 rounded-lg">
+                  <button type="button" onClick={() => recalcular(modal.cot.id)} className="btn-secondary btn-primary-sm">
                     Recalcular precio
                   </button>
-                  <button onClick={() => enviar(modal.cot.id)} className="px-3 py-1 text-sm bg-amber-500 text-slate-900 rounded-lg font-medium">
+                  <button type="button" onClick={() => enviar(modal.cot.id)} className="btn-primary btn-primary-sm">
                     Enviar al cliente
                   </button>
                 </>
               )}
               {modal.cot.estado === 'enviada' && isCliente && (
                 <>
-                  <button onClick={() => aceptar(modal.cot.id)} className="px-3 py-1 text-sm bg-green-600 hover:bg-green-500 rounded-lg">
-                    Aceptar Cotización
+                  <button type="button" onClick={() => aceptar(modal.cot.id)} className="btn-primary btn-primary-sm">
+                    Aceptar cotización
                   </button>
-                  <button onClick={() => rechazar(modal.cot.id)} className="px-3 py-1 text-sm bg-red-600 hover:bg-red-500 rounded-lg">
+                  <button type="button" onClick={() => rechazar(modal.cot.id)} className="btn-danger btn-primary-sm">
                     Rechazar
                   </button>
                 </>
               )}
               {modal.cot.estado === 'aceptada' && (
-                <p className="text-green-500 text-sm">
-                  ✓ Cotización aceptada. La reserva fue generada automáticamente.
+                <p className="text-sm text-success-400">
+                  Cotización aceptada. La reserva fue generada automáticamente.
                 </p>
               )}
             </div>
@@ -210,8 +260,8 @@ export default function Cotizaciones() {
           <FormInput label="Fecha deseada" name="fecha_deseada" type="date" value={form.fecha_deseada} onChange={handleChange} />
           <FormInput label="Franja horaria" name="franja_horaria" value={form.franja_horaria} onChange={handleChange} placeholder="Ej: 08:00-12:00" />
           <div className="flex justify-end gap-2 pt-4">
-            <button type="button" onClick={() => setFormModal({ open: false, cot: null })} className="px-4 py-2 text-slate-400 hover:text-white">Cancelar</button>
-            <button type="submit" disabled={saving} className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400 disabled:opacity-50">{saving ? 'Guardando...' : isEditing ? 'Guardar' : 'Crear'}</button>
+            <button type="button" onClick={() => setFormModal({ open: false, cot: null })} className="btn-ghost">Cancelar</button>
+            <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Guardando...' : isEditing ? 'Guardar' : 'Crear'}</button>
           </div>
         </form>
       </Modal>

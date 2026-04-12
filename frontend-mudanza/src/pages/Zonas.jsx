@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import api from '../api/client'
+import { toastApiError, toastSuccess } from '../utils/apiToast'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
 import FormInput from '../components/FormInput'
 import FormSelect from '../components/FormSelect'
 import FormCheckbox from '../components/FormCheckbox'
+import { cn } from '../lib/cn'
 
 export default function Zonas() {
   const [zonas, setZonas] = useState([])
@@ -80,10 +82,14 @@ export default function Zonas() {
     const req = isEditing ? api.patch(`/zonas/${modal.item.id}/`, payload) : api.post('/zonas/', payload)
     req
       .then(() => {
+        toastSuccess(isEditing ? 'Zona actualizada' : 'Zona creada')
         fetchZonas()
         closeModal()
       })
-      .catch((err) => setErrors(err.response?.data || {}))
+      .catch((err) => {
+        setErrors(err.response?.data || {})
+        toastApiError(err)
+      })
       .finally(() => setSaving(false))
   }
 
@@ -102,21 +108,37 @@ export default function Zonas() {
       : api.post('/zonas/tarifas/', payload)
     req
       .then(() => {
+        toastSuccess(isEditing ? 'Tarifa actualizada' : 'Tarifa creada')
         fetchTarifas()
         closeModal()
       })
-      .catch((err) => setErrors(err.response?.data || {}))
+      .catch((err) => {
+        setErrors(err.response?.data || {})
+        toastApiError(err)
+      })
       .finally(() => setSaving(false))
   }
 
   const handleDeleteZona = (z) => {
     if (!window.confirm(`¿Eliminar zona ${z.nombre}?`)) return
-    api.delete(`/zonas/${z.id}/`).then(() => fetchZonas()).catch((e) => alert(e.response?.data?.detail || 'Error'))
+    api
+      .delete(`/zonas/${z.id}/`)
+      .then(() => {
+        toastSuccess('Zona eliminada')
+        fetchZonas()
+      })
+      .catch((e) => toastApiError(e, 'No se pudo eliminar la zona'))
   }
 
   const handleDeleteTarifa = (t) => {
     if (!window.confirm(`¿Eliminar tarifa ${t.zona_origen_nombre} → ${t.zona_destino_nombre}?`)) return
-    api.delete(`/zonas/tarifas/${t.id}/`).then(() => fetchTarifas()).catch((e) => alert(e.response?.data?.detail || 'Error'))
+    api
+      .delete(`/zonas/tarifas/${t.id}/`)
+      .then(() => {
+        toastSuccess('Tarifa eliminada')
+        fetchTarifas()
+      })
+      .catch((e) => toastApiError(e, 'No se pudo eliminar la tarifa'))
   }
 
   const zonaCols = [
@@ -137,20 +159,20 @@ export default function Zonas() {
         <div className="flex gap-2">
           <button
             onClick={() => setTab('zonas')}
-            className={`px-4 py-2 rounded-lg ${tab === 'zonas' ? 'bg-amber-500 text-slate-900' : 'bg-slate-800'}`}
+            className={cn('tab-pill text-sm', tab === 'zonas' ? 'tab-pill-active' : 'tab-pill-idle')}
           >
             Zonas
           </button>
           <button
             onClick={() => setTab('tarifas')}
-            className={`px-4 py-2 rounded-lg ${tab === 'tarifas' ? 'bg-amber-500 text-slate-900' : 'bg-slate-800'}`}
+            className={cn('tab-pill text-sm', tab === 'tarifas' ? 'tab-pill-active' : 'tab-pill-idle')}
           >
             Tarifas
           </button>
         </div>
         <button
           onClick={tab === 'zonas' ? openCreateZona : openCreateTarifa}
-          className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400"
+          className="btn-primary"
         >
           + Nuevo
         </button>
@@ -184,8 +206,8 @@ export default function Zonas() {
           <FormInput label="Distrito" name="distrito" value={form.distrito} onChange={handleChange} />
           <FormCheckbox label="Zona activa" name="es_activa" checked={form.es_activa} onChange={handleChange} />
           <div className="flex justify-end gap-2 pt-4">
-            <button type="button" onClick={closeModal} className="px-4 py-2 text-slate-400 hover:text-white">Cancelar</button>
-            <button type="submit" disabled={saving} className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400 disabled:opacity-50">
+            <button type="button" onClick={closeModal} className="btn-ghost">Cancelar</button>
+            <button type="submit" disabled={saving} className="btn-primary">
               {saving ? 'Guardando...' : isEditing ? 'Guardar' : 'Crear'}
             </button>
           </div>
@@ -237,8 +259,8 @@ export default function Zonas() {
             error={errors.tarifa_base}
           />
           <div className="flex justify-end gap-2 pt-4">
-            <button type="button" onClick={closeModal} className="px-4 py-2 text-slate-400 hover:text-white">Cancelar</button>
-            <button type="submit" disabled={saving} className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400 disabled:opacity-50">
+            <button type="button" onClick={closeModal} className="btn-ghost">Cancelar</button>
+            <button type="submit" disabled={saving} className="btn-primary">
               {saving ? 'Guardando...' : isEditing ? 'Guardar' : 'Crear'}
             </button>
           </div>

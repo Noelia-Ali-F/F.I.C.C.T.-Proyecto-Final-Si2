@@ -6,6 +6,9 @@ import FormInput from '../components/FormInput'
 import FormSelect from '../components/FormSelect'
 import FormTextarea from '../components/FormTextarea'
 import { useAuth } from '../context/AuthContext'
+import { toastApiError, toastSuccess } from '../utils/apiToast'
+import { cn } from '../lib/cn'
+import { PAGE_SIZE, parsePagedResponse } from '../utils/paging'
 
 const CANALES = [
   { id: 'llamada', nombre: 'Llamada' },
@@ -41,6 +44,8 @@ export default function Clientes() {
   const [errors, setErrors] = useState({})
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
 
   const [ficha, setFicha] = useState({ open: false, cliente: null, tab: 'resumen' })
   const [historial, setHistorial] = useState(null)
@@ -54,10 +59,19 @@ export default function Clientes() {
 
   const fetchClientes = () => {
     setLoading(true)
-    const params = search ? { search } : {}
-    api.get('/clientes/', { params })
-      .then(({ data }) => setClientes(data.results ?? data ?? []))
-      .catch(() => setClientes([]))
+    const params = { page }
+    if (search) params.search = search
+    api
+      .get('/clientes/', { params })
+      .then(({ data }) => {
+        const { results, count } = parsePagedResponse(data)
+        setClientes(results)
+        setTotalCount(count)
+      })
+      .catch(() => {
+        setClientes([])
+        setTotalCount(0)
+      })
       .finally(() => setLoading(false))
   }
 
@@ -67,7 +81,7 @@ export default function Clientes() {
 
   useEffect(() => {
     if (puedeVer()) fetchClientes()
-  }, [search])
+  }, [search, page])
 
   useEffect(() => {
     if (puedeRegistrar()) {
@@ -163,43 +177,63 @@ export default function Clientes() {
       : api.post('/clientes/', payload)
     req
       .then(() => {
+        toastSuccess(isEditing ? 'Cliente actualizado' : 'Cliente registrado')
         fetchClientes()
         closeModal()
       })
-      .catch((err) => setErrors(err.response?.data || {}))
+      .catch((err) => {
+        setErrors(err.response?.data || {})
+        toastApiError(err)
+      })
       .finally(() => setSaving(false))
   }
 
   const handleDelete = (c) => {
     if (!window.confirm(`¿Eliminar cliente ${c.usuario_nombre}?`)) return
-    api.delete(`/clientes/${c.id}/`)
-      .then(() => fetchClientes())
-      .catch((err) => alert(err.response?.data?.detail || 'Error al eliminar'))
+    api
+      .delete(`/clientes/${c.id}/`)
+      .then(() => {
+        toastSuccess('Cliente eliminado')
+        fetchClientes()
+      })
+      .catch((err) => toastApiError(err, 'Error al eliminar'))
   }
 
   const addComunicacion = (e) => {
     e.preventDefault()
     if (!ficha.cliente) return
-    api.post('/clientes/comunicaciones/', {
-      cliente: ficha.cliente.id,
-      canal: comForm.canal,
-      asunto: comForm.asunto,
-      contenido: comForm.contenido,
-      direccion: comForm.direccion,
-    }).then(() => loadFichaData(ficha.cliente.id)).catch(() => {})
+    api
+      .post('/clientes/comunicaciones/', {
+        cliente: ficha.cliente.id,
+        canal: comForm.canal,
+        asunto: comForm.asunto,
+        contenido: comForm.contenido,
+        direccion: comForm.direccion,
+      })
+      .then(() => {
+        toastSuccess('Comunicación registrada')
+        loadFichaData(ficha.cliente.id)
+      })
+      .catch((err) => toastApiError(err, 'No se pudo registrar la comunicación'))
   }
 
   const addAlerta = (e) => {
     e.preventDefault()
     if (!ficha.cliente || !alertForm.fecha_programada) return
-    api.post('/clientes/alertas/', {
-      cliente: ficha.cliente.id,
-      tipo: alertForm.tipo,
-      titulo: alertForm.titulo,
-      descripcion: alertForm.descripcion,
-      fecha_programada: new Date(alertForm.fecha_programada).toISOString(),
-      estado: alertForm.estado,
-    }).then(() => loadFichaData(ficha.cliente.id)).catch(() => {})
+    api
+      .post('/clientes/alertas/', {
+        cliente: ficha.cliente.id,
+        tipo: alertForm.tipo,
+        titulo: alertForm.titulo,
+        descripcion: alertForm.descripcion,
+        fecha_programada: new Date(alertForm.fecha_programada).toISOString(),
+        estado: alertForm.estado,
+      })
+      .then(() => {
+        toastSuccess('Alerta creada')
+        loadFichaData(ficha.cliente.id)
+      })
+      .catch((err) => toastApiError(err, 'No se pudo crear la alerta'))
   }
 
   const usuariosSinCliente = usuarios.filter((u) => !clientes.some((c) => c.usuario === u.id))
@@ -224,22 +258,26 @@ export default function Clientes() {
   }
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Clientes (CRM)</h1>
-        <div className="flex gap-2">
+    <div className="animate-fade-in">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="page-title">Clientes (CRM)</h1>
+          <p className="page-subtitle max-w-2xl">Ficha, historial y comunicación con tus clientes de mudanzas.</p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <input
             type="search"
             placeholder="Buscar..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg w-64"
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setPage(1)
+            }}
+            className="input-search-toolbar"
+            aria-label="Buscar clientes"
           />
           {puedeRegistrar() && (
-            <button
-              onClick={openCreate}
-              className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400"
-            >
+            <button type="button" onClick={openCreate} className="btn-primary shrink-0">
               + Nuevo cliente
             </button>
           )}
@@ -253,6 +291,13 @@ export default function Clientes() {
         onEdit={puedeRegistrar() ? openEdit : undefined}
         onDelete={puedeEliminar() ? handleDelete : undefined}
         extraActions={extraFicha}
+        pagination={{
+          page,
+          pageSize: PAGE_SIZE,
+          totalCount,
+          loading,
+          onPageChange: setPage,
+        }}
       />
 
       {puedeRegistrar() && (
@@ -314,13 +359,13 @@ export default function Clientes() {
               ]}
             />
             <div className="flex justify-end gap-2 pt-4">
-              <button type="button" onClick={closeModal} className="px-4 py-2 text-slate-400 hover:text-white">
+              <button type="button" onClick={closeModal} className="btn-ghost">
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="px-4 py-2 bg-amber-500 text-slate-900 font-medium rounded-lg hover:bg-amber-400 disabled:opacity-50"
+                className="btn-primary"
               >
                 {saving ? 'Guardando...' : isEditing ? 'Guardar' : 'Crear'}
               </button>
@@ -338,7 +383,10 @@ export default function Clientes() {
                   key={t}
                   type="button"
                   onClick={() => setFicha((s) => ({ ...s, tab: t }))}
-                  className={`px-3 py-1 rounded-lg text-sm ${ficha.tab === t ? 'bg-amber-500/20 text-amber-400' : 'text-slate-400 hover:bg-slate-800'}`}
+                  className={cn(
+                    'rounded-xl px-3 py-1.5 text-sm font-medium transition',
+                    ficha.tab === t ? 'tab-soft-active text-primary-200' : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
+                  )}
                 >
                   {t === 'resumen' ? 'Resumen' : t === 'historial' ? 'Historial mudanzas' : t === 'comunicaciones' ? 'Comunicaciones' : 'Alertas'}
                 </button>
@@ -365,7 +413,7 @@ export default function Clientes() {
                     </p>
                     {historial.reservas?.map((r) => (
                       <div key={`r-${r.id}`} className="border border-slate-700 rounded p-2">
-                        <span className="text-amber-400">Reserva {r.codigo}</span> — {r.estado} — {r.fecha_servicio}
+                        <span className="text-primary-400">Reserva {r.codigo}</span> — {r.estado} — {r.fecha_servicio}
                         {r.mudanza_estado && <span className="text-slate-500"> · Mudanza: {r.mudanza_estado}</span>}
                       </div>
                     ))}
@@ -394,7 +442,7 @@ export default function Clientes() {
                         onChange={(e) => setComForm({ ...comForm, direccion: e.target.value })}
                         options={[{ id: 'entrante', nombre: 'Entrante' }, { id: 'saliente', nombre: 'Saliente' }]}
                       />
-                      <button type="submit" className="px-3 py-1.5 bg-amber-500 text-slate-900 rounded text-sm font-medium">Registrar</button>
+                      <button type="submit" className="btn-primary btn-primary-sm">Registrar</button>
                     </form>
                     <ul className="max-h-48 overflow-y-auto space-y-1 text-sm">
                       {coms.map((x) => (
